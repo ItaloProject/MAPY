@@ -709,7 +709,9 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
     e.preventDefault();
     if (!form.nome || !form.cpf) return;
 
-    const pubId = crypto.randomUUID();
+    // ID curto (10 hex chars) → URL menor → QR mais simples e legível
+    const bytes = crypto.getRandomValues(new Uint8Array(5));
+    const pubId = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
     const url = `${window.location.origin}/pub/${pubId}`;
 
     const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
