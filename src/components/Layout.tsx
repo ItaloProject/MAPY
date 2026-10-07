@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import "./Layout.css";
+import { supabase } from "../lib/supabase";
 
-const nav = [
+const navBase = [
   {
     to: "/dashboard", label: "Dashboard",
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>,
@@ -18,7 +19,7 @@ const nav = [
   {
     to: "/pendentes", label: "Pendentes",
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-    badge: 7,
+    pendente: true,
   },
   {
     to: "/usuarios", label: "Usuários",
@@ -31,8 +32,24 @@ const nav = [
 ];
 
 export default function Layout({ onLogout }: { onLogout?: () => void }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed,  setCollapsed]  = useState(false);
+  const [pendentes,  setPendentes]  = useState(0);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    async function buscarPendentes() {
+      const { count } = await supabase
+        .from("publicacoes")
+        .select("*", { count: "exact", head: true })
+        .is("url", null);
+      setPendentes(count ?? 0);
+    }
+    buscarPendentes();
+
+    // Atualiza a cada 60s sem precisar recarregar a página
+    const interval = setInterval(buscarPendentes, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className={`layout ${collapsed ? "layout--collapsed" : ""}`}>
@@ -48,22 +65,23 @@ export default function Layout({ onLogout }: { onLogout?: () => void }) {
           </div>
           <button className="sidebar-toggle" onClick={() => setCollapsed(v => !v)} aria-label="Recolher menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {collapsed
-                ? <><path d="M9 18l6-6-6-6"/></>
-                : <><path d="M15 18l-6-6 6-6"/></>}
+              {collapsed ? <path d="M9 18l6-6-6-6"/> : <path d="M15 18l-6-6 6-6"/>}
             </svg>
           </button>
         </div>
 
         <nav className="sidebar-nav">
-          {nav.map(item => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}>
-              <span className="nav-icon">{item.icon}</span>
-              {!collapsed && <span className="nav-label">{item.label}</span>}
-              {!collapsed && item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-              {collapsed && item.badge ? <span className="nav-badge nav-badge--dot" /> : null}
-            </NavLink>
-          ))}
+          {navBase.map(item => {
+            const badge = item.pendente ? pendentes : 0;
+            return (
+              <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}>
+                <span className="nav-icon">{item.icon}</span>
+                {!collapsed && <span className="nav-label">{item.label}</span>}
+                {!collapsed && badge > 0 ? <span className="nav-badge">{badge}</span> : null}
+                {collapsed  && badge > 0 ? <span className="nav-badge nav-badge--dot" /> : null}
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
@@ -77,7 +95,7 @@ export default function Layout({ onLogout }: { onLogout?: () => void }) {
             )}
           </div>
           {!collapsed && (
-            <button className="btn-logout" onClick={() => { onLogout?.(); navigate("/login"); }} title="Sair">
+            <button className="btn-logout" onClick={() => { onLogout?.(); navigate("/acesso"); }} title="Sair">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
               </svg>
@@ -96,7 +114,7 @@ export default function Layout({ onLogout }: { onLogout?: () => void }) {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
               </svg>
-              <span className="topbar-badge">7</span>
+              {pendentes > 0 && <span className="topbar-badge">{pendentes}</span>}
             </button>
             <button className="topbar-btn" title="Perfil">
               <div className="topbar-avatar">IT</div>

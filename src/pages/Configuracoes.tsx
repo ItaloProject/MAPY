@@ -22,7 +22,7 @@ export default function Configuracoes() {
         <p className="page-sub">Preferências da conta e do sistema</p>
       </div>
 
-      <div style={{ display: "grid", gap: 20, maxWidth: 640 }}>
+      <div style={{ display: "grid", gap: 20, maxWidth: 640, margin: "0 auto", width: "100%" }}>
         <form className="section-card" onSubmit={salvar}>
           <div className="section-card-header">
             <span className="section-card-title">Perfil</span>

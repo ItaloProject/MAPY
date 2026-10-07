@@ -1,31 +1,47 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../components/Layout.css";
 import "./QRCodes.css";
-
-const grupos = [
-  {
-    id: "publicacao",
-    nome: "PUBLICAÇÃO",
-    descricao: "Publicações no Diário Oficial — geração e gestão de registros",
-    total: 6,
-    ativos: 4,
-    cor: "#6366f1",
-    bg: "rgba(99,102,241,0.08)",
-    bordaAtiva: "rgba(99,102,241,0.4)",
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" x2="8" y1="13" y2="13"/>
-        <line x1="16" x2="8" y1="17" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
-      </svg>
-    ),
-  },
-];
+import { supabase } from "../lib/supabase";
 
 export default function QRCodes() {
   const navigate = useNavigate();
+  const [total,  setTotal]  = useState<number | null>(null);
+  const [ativos, setAtivos] = useState<number | null>(null);
+
+  useEffect(() => {
+    async function carregar() {
+      const [{ count: tot }, { count: atv }] = await Promise.all([
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }),
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }).not("url", "is", null),
+      ]);
+      setTotal(tot ?? 0);
+      setAtivos(atv ?? 0);
+    }
+    carregar();
+  }, []);
+
+  const grupos = [
+    {
+      id: "publicacao",
+      nome: "PUBLICAÇÃO",
+      descricao: "Publicações no Diário Oficial — geração e gestão de registros",
+      total: total,
+      ativos: ativos,
+      cor: "#6366f1",
+      bg: "rgba(99,102,241,0.08)",
+      bordaAtiva: "rgba(99,102,241,0.4)",
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" x2="8" y1="13" y2="13"/>
+          <line x1="16" x2="8" y1="17" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -51,11 +67,15 @@ export default function QRCodes() {
             </div>
             <div className="grupo-meta">
               <div className="grupo-stat">
-                <span className="grupo-stat-val">{g.total}</span>
+                <span className="grupo-stat-val">
+                  {g.total === null ? "…" : g.total}
+                </span>
                 <span className="grupo-stat-label">total</span>
               </div>
               <div className="grupo-stat">
-                <span className="grupo-stat-val" style={{ color: "#34d399" }}>{g.ativos}</span>
+                <span className="grupo-stat-val" style={{ color: "#34d399" }}>
+                  {g.ativos === null ? "…" : g.ativos}
+                </span>
                 <span className="grupo-stat-label">ativos</span>
               </div>
             </div>
