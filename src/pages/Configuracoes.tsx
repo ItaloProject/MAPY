@@ -1,13 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "../components/Layout.css";
+import { supabase } from "../lib/supabase";
 
 export default function Configuracoes() {
-  const [nome, setNome] = useState("Italo Admin");
-  const [email] = useState("italo.fontes2026@gmail.com");
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifSistema, setNotifSistema] = useState(true);
   const [notifPendentes, setNotifPendentes] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) setEmail(user.email);
+      setNome(user?.user_metadata?.nome ?? user?.email?.split("@")[0] ?? "Administrador");
+    });
+  }, []);
 
   function salvar(e: React.FormEvent) {
     e.preventDefault();

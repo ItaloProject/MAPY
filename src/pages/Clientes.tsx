@@ -169,9 +169,9 @@ export default function Controle() {
               <div>
                 <label style={labelSt}>Nome completo *</label>
                 <input
-                  value={nome} onChange={e => setNome(e.target.value)}
-                  placeholder="Ex.: João da Silva"
-                  style={inputSt} autoFocus
+                  value={nome} onChange={e => setNome(e.target.value.toUpperCase())}
+                  placeholder="EX.: JOÃO DA SILVA"
+                  style={{ ...inputSt, textTransform: "uppercase" }} autoFocus
                   onKeyDown={e => e.key === "Enter" && adicionar()}
                 />
               </div>
