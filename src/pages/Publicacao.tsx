@@ -396,7 +396,7 @@ function QRDisplay({ cliente, size = 220 }: { cliente: Cliente; size?: number })
 
   if (png) return <img src={png} alt="QR Code" style={{ width: size, height: size, display: "block", imageRendering: "pixelated" }} />;
 
-  return <QRCodeSVG value={cliente.url} size={size} fgColor="#000000" bgColor="#ffffff" level="H" />;
+  return <QRCodeSVG value={cliente.url} size={size} fgColor="#000000" bgColor="#ffffff" level="M" />;
 }
 
 /* ── Modal QR ── */
@@ -683,7 +683,7 @@ function QRCapture({ pubId, url }: { pubId: string; url: string }) {
 
   return (
     <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-      <QRCodeCanvas ref={ref} value={url} size={400} fgColor="#000000" bgColor="#ffffff" level="H" />
+      <QRCodeCanvas ref={ref} value={url} size={400} fgColor="#000000" bgColor="#ffffff" level="M" />
     </div>
   );
 }
@@ -766,7 +766,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
         </div>
 
         <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
-          <QRCodeSVG value={gerado.url} size={220} fgColor="#000000" bgColor="#ffffff" level="H" />
+          <QRCodeSVG value={gerado.url} size={220} fgColor="#000000" bgColor="#ffffff" level="M" />
         </div>
 
         <div style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }}>
