@@ -41,7 +41,7 @@ export default function Layout({ onLogout }: { onLogout?: () => void }) {
       const { count } = await supabase
         .from("publicacoes")
         .select("*", { count: "exact", head: true })
-        .is("url", null);
+        .eq("pagamento_status", "pendente");
       setPendentes(count ?? 0);
     }
     buscarPendentes();
