@@ -376,31 +376,20 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "visualizar", label: "VISUALIZAR" },
 ];
 
-/* ── QR estático: lê PNG salvo ou gera SVG como fallback ── */
+/* ── QR Display: sempre SVG fresco (sem cache localStorage) ── */
 function QRDisplay({ cliente, size = 220 }: { cliente: Cliente; size?: number }) {
-  const [png, setPng] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`qr_${cliente.pubId}`);
-      if (saved) { setPng(saved); return; }
-    } catch {}
-    setPng(null);
-  }, [cliente.pubId]);
-
   if (!cliente.url) return (
     <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fg-muted)" }}>
       <p style={{ fontSize: 13 }}>QR Code não gerado ainda.<br />Gere a publicação primeiro na aba NOVO.</p>
     </div>
   );
-
-  if (png) return <img src={png} alt="QR Code" style={{ width: size, height: size, display: "block", imageRendering: "pixelated" }} />;
-
   return <QRCodeSVG value={cliente.url} size={size} fgColor="#000000" bgColor="#ffffff" level="M" />;
 }
 
 /* ── Modal QR ── */
 function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", fn);
@@ -408,9 +397,9 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
   }, [onClose]);
 
   function baixar() {
+    if (!canvasRef.current) return;
     try {
-      const png = localStorage.getItem(`qr_${cliente.pubId}`);
-      if (!png) return;
+      const png = canvasRef.current.toDataURL("image/png");
       const a = document.createElement("a");
       a.href = png;
       a.download = `qrcode-${cliente.nome.split(" ")[0].toLowerCase()}.png`;
@@ -435,6 +424,10 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
         <div className="modal-body" style={{ alignItems: "center" }}>
           {cliente.url ? (
             <>
+              {/* Canvas oculto para download — level="M" garantido */}
+              <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
+                <QRCodeCanvas ref={canvasRef} value={cliente.url} size={600} fgColor="#000000" bgColor="#ffffff" level="M" />
+              </div>
               <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
                 <QRDisplay cliente={cliente} size={220} />
               </div>
