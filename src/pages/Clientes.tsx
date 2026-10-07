@@ -14,7 +14,7 @@ type Cliente = {
 };
 
 const AVATAR_COLORS = [
-  "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444",
+  "#0ea5e9","#06b6d4","#10b981","#f59e0b","#f43f5e","#3b82f6","#8b5cf6",
 ];
 function avatarColor(nome: string) {
   let h = 0;
@@ -38,8 +38,8 @@ const statusStyle: Record<string, { dot: string }> = {
   Inativo:  { dot: "#6b7280" },
 };
 const planoStyle: Record<string, { bg: string; fg: string }> = {
-  Básico:     { bg: "rgba(107,114,128,0.15)", fg: "#9ca3af" },
-  Pro:        { bg: "rgba(99,102,241,0.15)",  fg: "#818cf8" },
+  Básico:     { bg: "rgba(100,116,139,0.15)", fg: "#94a3b8" },
+  Pro:        { bg: "rgba(14,165,233,0.15)",  fg: "#38bdf8" },
   Enterprise: { bg: "rgba(16,185,129,0.15)",  fg: "#34d399" },
 };
 

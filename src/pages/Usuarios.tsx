@@ -16,7 +16,7 @@ type ModalTipo = "criar" | "suspender" | "reset" | "apagar" | null;
 
 const PERFIS = ["Administrador", "Operador", "Suporte", "Visualizador"];
 
-const AVATAR_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#ef4444"];
+const AVATAR_COLORS = ["#0ea5e9", "#06b6d4", "#10b981", "#f59e0b", "#f43f5e", "#3b82f6", "#8b5cf6"];
 function avatarColor(nome: string) {
   let h = 0;
   for (let i = 0; i < nome.length; i++) h = nome.charCodeAt(i) + ((h << 5) - h);
@@ -33,9 +33,9 @@ function fmtData(iso: string | null) {
 
 const perfilColor: Record<string, { bg: string; fg: string }> = {
   Administrador: { bg: "rgba(239,68,68,0.15)",  fg: "#f87171" },
-  Operador:      { bg: "rgba(99,102,241,0.15)",  fg: "#818cf8" },
+  Operador:      { bg: "rgba(14,165,233,0.15)",  fg: "#38bdf8" },
   Suporte:       { bg: "rgba(245,158,11,0.15)",  fg: "#fbbf24" },
-  Visualizador:  { bg: "rgba(107,114,128,0.15)", fg: "#9ca3af" },
+  Visualizador:  { bg: "rgba(100,116,139,0.15)", fg: "#94a3b8" },
 };
 const statusColor: Record<string, { dot: string; fg: string }> = {
   Ativo:    { dot: "#34d399", fg: "#34d399" },

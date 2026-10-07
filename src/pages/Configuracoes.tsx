@@ -31,7 +31,7 @@ export default function Configuracoes() {
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
               <div style={{
                 width: 60, height: 60, borderRadius: "50%",
-                background: "linear-gradient(135deg, var(--accent), #7c3aed)",
+                background: "var(--accent)",
                 color: "#fff", fontSize: 18, fontWeight: 700,
                 display: "flex", alignItems: "center", justifyContent: "center"
               }}>IT</div>
