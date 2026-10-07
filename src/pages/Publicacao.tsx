@@ -715,13 +715,7 @@ function TabNovo({ onGerar }: { onGerar: (c: Cliente) => void }) {
     const pubId = crypto.randomUUID();
     const url = `${window.location.origin}/pub/${pubId}`;
 
-    let dataDisplay = "";
-    if (form.dataPublicacao) {
-      const [y, m, d] = form.dataPublicacao.split("-");
-      dataDisplay = `${d}/${m}/${y}`;
-    } else {
-      dataDisplay = new Date().toLocaleDateString("pt-BR");
-    }
+    const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
 
     const protocolo = form.protocolo || Date.now().toString().slice(-13);
 
@@ -830,7 +824,7 @@ function TabNovo({ onGerar }: { onGerar: (c: Cliente) => void }) {
           <div className="edit-grid">
             <Field label="Curso" value={form.curso} onChange={setField("curso", up)} full />
             <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={setField("anoConclusao")} />
-            <FieldDate label="Data de Publicação" value={form.dataPublicacao} onChange={setField("dataPublicacao")} />
+            <Field label="Data de Publicação" value={form.dataPublicacao} onChange={setField("dataPublicacao", maskData)} placeholder="DD/MM/AAAA" />
             <Field label="Protocolo" value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
           </div>
         </div>
