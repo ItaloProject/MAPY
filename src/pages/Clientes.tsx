@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "../components/Layout.css";
 import { supabase } from "../lib/supabase";
 
@@ -50,15 +51,17 @@ export default function Controle() {
   const [saving,    setSaving]    = useState(false);
   const [toast,     setToast]     = useState<string | null>(null);
   const [search,    setSearch]    = useState("");
+  const [ordem,     setOrdem]     = useState<"desc" | "asc">("desc");
+  const navigate = useNavigate();
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); }, [ordem]);
 
   async function carregar() {
     setLoading(true);
     const { data } = await supabase
       .from("clientes")
       .select("id,nome,cpf,controle_status,created_at")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: ordem === "asc" });
     setRegistros((data ?? []) as Registro[]);
     setLoading(false);
   }
@@ -238,6 +241,28 @@ export default function Controle() {
           </button>
         ))}
 
+        {/* Ordenação */}
+        <button
+          onClick={() => setOrdem(o => o === "desc" ? "asc" : "desc")}
+          title={ordem === "desc" ? "Mostrando mais recentes primeiro" : "Mostrando mais antigos primeiro"}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
+            background: "transparent", color: "var(--fg-muted)", fontSize: 12,
+            fontWeight: 600, cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap",
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--accent)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-muted)"; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            {ordem === "desc"
+              ? <><line x1="12" y1="20" x2="12" y2="4"/><polyline points="18 10 12 4 6 10"/></>
+              : <><line x1="12" y1="4" x2="12" y2="20"/><polyline points="18 14 12 20 6 14"/></>
+            }
+          </svg>
+          {ordem === "desc" ? "Mais recentes" : "Mais antigos"}
+        </button>
+
         {/* Busca */}
         <div style={{ position: "relative", marginLeft: "auto", minWidth: 220 }}>
           <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-muted)", pointerEvents: "none" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -308,6 +333,14 @@ export default function Controle() {
 
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        {/* Botão Fazer → navega para /qrcodes/publicacao com nome e CPF */}
+                        <button
+                          onClick={() => navigate("/qrcodes/publicacao", { state: { nome: r.nome, cpf: r.cpf ?? "" } })}
+                          style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                        >
+                          Fazer
+                        </button>
+
                         {aba === "Pendente" ? (
                           <button onClick={() => concluir(r.id, r.nome)} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
                             ✓ Concluir

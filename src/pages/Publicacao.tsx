@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
 import "../components/Layout.css";
@@ -697,8 +697,12 @@ const formVazio = {
   protocolo: "",
 };
 
-function TabNovo({ onGerar }: { onGerar: (c: Cliente) => void }) {
-  const [form, setForm] = useState(formVazio);
+function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?: { nome?: string; cpf?: string } | null }) {
+  const [form, setForm] = useState({
+    ...formVazio,
+    nome: prefill?.nome ?? "",
+    cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "",
+  });
   const [gerado, setGerado] = useState<Cliente | null>(null);
   function setField(k: keyof typeof form, transform?: (v: string) => string) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -960,7 +964,9 @@ function PrevRow({ label, value }: { label: string; value: string }) {
 /* ── Componente principal ── */
 export default function Publicacao() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>("clientes");
+  const location = useLocation();
+  const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
+  const [activeTab, setActiveTab] = useState<Tab>(prefill ? "novo" : "clientes");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
 
@@ -1035,7 +1041,7 @@ export default function Publicacao() {
           ) : (
             <>
               {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} />}
-              {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} />}
+              {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} prefill={prefill} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
             </>
