@@ -68,7 +68,6 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           </div>
           <div className="logo-wordmark"><em>e-</em>MEC</div>
         </div>
-        <div className="logo-eyebrow">Sistema Eletrônico de Cadastro &amp; Gestão</div>
       </header>
 
       {/* ── Separator ── */}
