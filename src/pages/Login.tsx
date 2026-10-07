@@ -9,17 +9,14 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [success, setSuccess] = useState(false);
-  const [focused, setFocused] = useState<Field | null>(null);
 
   function validate() {
     const e: Partial<Record<Field, string>> = {};
-    if (!email.trim()) e.email = "E-mail é obrigatório";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "E-mail inválido";
+    if (!email.trim()) e.email = "Usuário é obrigatório";
     if (!password) e.password = "Senha é obrigatória";
     else if (password.length < 6) e.password = "Mínimo de 6 caracteres";
     return e;
@@ -49,18 +46,36 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="page">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-      <div className="card">
-        <div className="brand">
-          <div className="brand-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7v5c0 5.25 4.2 10.15 10 11.35C17.8 22.15 22 17.25 22 12V7L12 2z" fill="currentColor"/>
+      <div className="bg-grid" aria-hidden="true" />
+      <div className="bg-glow" aria-hidden="true" />
+
+      {/* ── Header ── */}
+      <header className="header">
+        <div className="logo-row">
+          <div className="cube-wrap">
+            <svg width="78" height="80" viewBox="0 0 78 80" xmlns="http://www.w3.org/2000/svg" aria-label="Logo e-MEC">
+              <polygon points="39,4 74,23 39,42 4,23" fill="#7DD43A"/>
+              <polygon points="4,23 39,42 39,76 4,57" fill="#3A9A1E"/>
+              <polygon points="74,23 74,57 39,76 39,42" fill="#255E12"/>
+              <polygon points="39,8 70,25 39,38 8,25" fill="url(#hl)" opacity="0.18"/>
+              <defs>
+                <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fff"/>
+                  <stop offset="100%" stopColor="#fff" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
             </svg>
           </div>
-          <span className="brand-name">e-mec.com.br</span>
+          <div className="logo-wordmark"><em>e-</em>MEC</div>
         </div>
+        <div className="logo-eyebrow">Sistema Eletrônico de Cadastro &amp; Gestão</div>
+      </header>
 
+      {/* ── Separator ── */}
+      <div className="sep" aria-hidden="true">Acesso seguro</div>
+
+      {/* ── Card ── */}
+      <section className="card">
         {success ? (
           <div className="success-state">
             <div className="success-icon">
@@ -73,39 +88,32 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           </div>
         ) : (
           <>
-            <div className="card-header">
-              <h1 className="card-title">Entrar</h1>
-              <p className="card-sub">Acesse sua conta para continuar</p>
+            <div className="card-head">
+              <h2>Entrar na plataforma</h2>
+              <p>Use suas credenciais institucionais para acessar</p>
             </div>
+
             <form className="form" onSubmit={handleSubmit} noValidate>
-              <div className={`field ${focused === "email" ? "field--focused" : ""} ${errors.email ? "field--error" : ""}`}>
-                <label className="field-label" htmlFor="email">E-mail</label>
+              <div className={`field${errors.email ? " field--error" : ""}`}>
+                <label className="field-label" htmlFor="email">Usuário</label>
                 <div className="input-wrap">
-                  <span className="input-icon">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                    </svg>
-                  </span>
-                  <input id="email" type="email" className="input" placeholder="seu@email.com"
-                    value={email} autoComplete="email"
-                    onChange={e => handleChange("email", e.target.value)}
-                    onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
+                  <input id="email" type="email" className="input"
+                    placeholder="CPF ou e-mail institucional"
+                    autoComplete="username"
+                    value={email}
+                    onChange={e => handleChange("email", e.target.value)} />
                 </div>
                 {errors.email && <span className="field-error">{errors.email}</span>}
               </div>
 
-              <div className={`field ${focused === "password" ? "field--focused" : ""} ${errors.password ? "field--error" : ""}`}>
+              <div className={`field${errors.password ? " field--error" : ""}`}>
                 <label className="field-label" htmlFor="password">Senha</label>
                 <div className="input-wrap">
-                  <span className="input-icon">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                  </span>
                   <input id="password" type={showPass ? "text" : "password"} className="input"
-                    placeholder="••••••••" value={password} autoComplete="current-password"
-                    onChange={e => handleChange("password", e.target.value)}
-                    onFocus={() => setFocused("password")} onBlur={() => setFocused(null)} />
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => handleChange("password", e.target.value)} />
                   <button type="button" className="toggle-pass" aria-label={showPass ? "Ocultar" : "Mostrar"} onClick={() => setShowPass(v => !v)}>
                     {showPass ? (
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -121,32 +129,37 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                 {errors.password && <span className="field-error">{errors.password}</span>}
               </div>
 
-              <div className="form-meta">
-                <label className="checkbox-label">
-                  <input type="checkbox" className="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
-                  <span className="checkbox-custom" /><span>Lembrar-me</span>
-                </label>
-                <a href="#" className="link-forgot" onClick={e => e.preventDefault()}>Esqueceu a senha?</a>
-              </div>
-
-              <button type="submit" className={`btn-submit ${loading ? "btn-submit--loading" : ""}`} disabled={loading}>
-                {loading ? <span className="spinner" /> : (
-                  <>
-                    <span>Entrar</span>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                  </>
-                )}
+              <button type="submit" className="btn-submit" disabled={loading}>
+                {loading ? <span className="spinner" /> : "Entrar"}
               </button>
             </form>
 
-            <p className="footer-text">
-              Acesso restrito a usuários autorizados
-            </p>
+            <div className="card-links">
+              <a href="#" onClick={e => e.preventDefault()}>Esqueci minha senha</a>
+              <a href="#" onClick={e => e.preventDefault()}>Suporte</a>
+            </div>
+
+            <div className="status-bar">
+              <div className="status-dot" />
+              <span>Ambiente seguro · Conexão criptografada</span>
+            </div>
           </>
         )}
+      </section>
+
+      {/* ── Badges ── */}
+      <div className="badges">
+        <span className="badge">Cadastro</span>
+        <span className="badge">Regulação</span>
+        <span className="badge">Supervisão</span>
+        <span className="badge">Avaliação</span>
+        <span className="badge">Relatórios</span>
       </div>
+
+      {/* ── Footer ── */}
+      <footer className="footer-text">
+        Ministério da Educação &nbsp;·&nbsp; Portal e-MEC &nbsp;·&nbsp; © 2026
+      </footer>
     </div>
   );
 }
