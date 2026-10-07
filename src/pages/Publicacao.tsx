@@ -376,14 +376,24 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "visualizar", label: "VISUALIZAR" },
 ];
 
+/* ── Estilo padrão de TODOS os QR codes: versão 8 (49 módulos), sem borda, preto sobre branco ── */
+const QR_STYLE = {
+  fgColor: "#000000",
+  bgColor: "#ffffff",
+  level: "L",
+  minVersion: 8,
+  boostLevel: false,
+  marginSize: 0,
+} as const;
+
 /* ── QR Display: sempre SVG fresco (sem cache localStorage) ── */
-function QRDisplay({ cliente, size = 220 }: { cliente: Cliente; size?: number }) {
+function QRDisplay({ cliente, size = 245 }: { cliente: Cliente; size?: number }) {
   if (!cliente.url) return (
     <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fg-muted)" }}>
       <p style={{ fontSize: 13 }}>QR Code não gerado ainda.<br />Gere a publicação primeiro na aba NOVO.</p>
     </div>
   );
-  return <QRCodeSVG value={cliente.url} size={size} fgColor="#000000" bgColor="#ffffff" level="L" marginSize={4} />;
+  return <QRCodeSVG value={cliente.url} size={size} {...QR_STYLE} />;
 }
 
 /* ── Modal QR ── */
@@ -442,10 +452,10 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
             <>
               {/* SVG oculto para download: versão 8 (49 módulos), sem borda */}
               <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-                <QRCodeSVG ref={svgRef} value={cliente.url} size={490} fgColor="#000000" bgColor="#ffffff" level="L" minVersion={8} boostLevel={false} marginSize={0} />
+                <QRCodeSVG ref={svgRef} value={cliente.url} size={490} {...QR_STYLE} />
               </div>
               <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
-                <QRDisplay cliente={cliente} size={260} />
+                <QRDisplay cliente={cliente} />
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 6 }}>
@@ -692,7 +702,7 @@ function QRCapture({ pubId, url }: { pubId: string; url: string }) {
 
   return (
     <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-      <QRCodeCanvas ref={ref} value={url} size={400} fgColor="#000000" bgColor="#ffffff" level="L" marginSize={4} />
+      <QRCodeCanvas ref={ref} value={url} size={392} {...QR_STYLE} />
     </div>
   );
 }
@@ -777,7 +787,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
         </div>
 
         <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
-          <QRCodeSVG value={gerado.url} size={220} fgColor="#000000" bgColor="#ffffff" level="L" marginSize={4} />
+          <QRCodeSVG value={gerado.url} size={245} {...QR_STYLE} />
         </div>
 
         <div style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }}>
