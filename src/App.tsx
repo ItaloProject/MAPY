@@ -40,12 +40,12 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route
-          path="/acesso"
+          path="/4c7913fce5eb"
           element={authed ? <Navigate to="/dashboard" replace /> : <Login onLogin={() => setAuthed(true)} />}
         />
         <Route
           path="/"
-          element={authed ? <Layout onLogout={logout} /> : <Navigate to="/acesso" replace />}
+          element={authed ? <Layout onLogout={logout} /> : <Navigate to="/4c7913fce5eb" replace />}
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
@@ -57,7 +57,7 @@ export default function App() {
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
         <Route path="/pub/:id" element={<PubViewer />} />
-        <Route path="*" element={<Navigate to={authed ? "/dashboard" : "/acesso"} replace />} />
+        <Route path="*" element={<Navigate to={authed ? "/dashboard" : "/4c7913fce5eb"} replace />} />
       </Routes>
     </BrowserRouter>
   );
