@@ -1,73 +1,104 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "../components/Layout.css";
+import { supabase } from "../lib/supabase";
 
-const CLIENTES = [
-  { id: 1, nome: "João Silva",    email: "joao@email.com",     telefone: "(11) 99999-1111", status: "Ativo",    qr: 12, plano: "Pro",        data: "04/10/2026" },
-  { id: 2, nome: "Maria Souza",   email: "maria@email.com",    telefone: "(21) 98888-2222", status: "Ativo",    qr: 8,  plano: "Básico",     data: "03/10/2026" },
-  { id: 3, nome: "Pedro Lima",    email: "pedro@email.com",    telefone: "(31) 97777-3333", status: "Pendente", qr: 0,  plano: "Pro",        data: "02/10/2026" },
-  { id: 4, nome: "Ana Costa",     email: "ana@email.com",      telefone: "(41) 96666-4444", status: "Inativo",  qr: 3,  plano: "Básico",     data: "01/10/2026" },
-  { id: 5, nome: "Carlos Neto",   email: "carlos@email.com",   telefone: "(51) 95555-5555", status: "Ativo",    qr: 21, plano: "Enterprise", data: "30/09/2026" },
-  { id: 6, nome: "Fernanda Reis", email: "fernanda@email.com", telefone: "(61) 94444-6666", status: "Ativo",    qr: 5,  plano: "Pro",        data: "29/09/2026" },
-  { id: 7, nome: "Lucas Martins", email: "lucas@email.com",    telefone: "(71) 93333-7777", status: "Inativo",  qr: 0,  plano: "Básico",     data: "28/09/2026" },
-];
+type Cliente = {
+  id: string;
+  nome: string;
+  email: string | null;
+  telefone: string | null;
+  plano: string;
+  status: string;
+  created_at: string;
+  qr_count?: number;
+};
 
 const AVATAR_COLORS = [
   "#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444",
 ];
-
 function avatarColor(nome: string) {
   let h = 0;
   for (let i = 0; i < nome.length; i++) h = nome.charCodeAt(i) + ((h << 5) - h);
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
-
 function iniciais(nome: string) {
   const p = nome.trim().split(" ");
   return (p[0][0] + (p[p.length - 1][0] ?? "")).toUpperCase();
+}
+function fmtData(iso: string) {
+  return new Date(iso).toLocaleDateString("pt-BR");
 }
 
 const STATUS_OPTS = ["Todos", "Ativo", "Pendente", "Inativo"];
 const PLANO_OPTS  = ["Todos", "Básico", "Pro", "Enterprise"];
 
-const statusStyle: Record<string, { dot: string; label: string }> = {
-  Ativo:    { dot: "#34d399", label: "Ativo"    },
-  Pendente: { dot: "#f59e0b", label: "Pendente" },
-  Inativo:  { dot: "#6b7280", label: "Inativo"  },
+const statusStyle: Record<string, { dot: string }> = {
+  Ativo:    { dot: "#34d399" },
+  Pendente: { dot: "#f59e0b" },
+  Inativo:  { dot: "#6b7280" },
 };
-
 const planoStyle: Record<string, { bg: string; fg: string }> = {
-  Básico:     { bg: "rgba(107,114,128,0.15)", fg: "#9ca3af"  },
-  Pro:        { bg: "rgba(99,102,241,0.15)",  fg: "#818cf8"  },
-  Enterprise: { bg: "rgba(16,185,129,0.15)",  fg: "#34d399"  },
+  Básico:     { bg: "rgba(107,114,128,0.15)", fg: "#9ca3af" },
+  Pro:        { bg: "rgba(99,102,241,0.15)",  fg: "#818cf8" },
+  Enterprise: { bg: "rgba(16,185,129,0.15)",  fg: "#34d399" },
 };
 
 export default function Clientes() {
-  const [search,      setSearch]      = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("Todos");
-  const [filtroPlano,  setFiltroPlano]  = useState("Todos");
+  const [clientes,      setClientes]      = useState<Cliente[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState("");
+  const [filtroStatus,  setFiltroStatus]  = useState("Todos");
+  const [filtroPlano,   setFiltroPlano]   = useState("Todos");
 
-  const filtered = CLIENTES.filter(c => {
+  useEffect(() => { carregar(); }, []);
+
+  async function carregar() {
+    setLoading(true);
+    const { data: clientesData } = await supabase
+      .from("clientes")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!clientesData) { setLoading(false); return; }
+
+    // conta publicações por nome de cliente (instituição)
+    const { data: pubData } = await supabase
+      .from("publicacoes")
+      .select("instituicao");
+
+    const contagem: Record<string, number> = {};
+    for (const p of pubData ?? []) {
+      if (p.instituicao) contagem[p.instituicao] = (contagem[p.instituicao] ?? 0) + 1;
+    }
+
+    setClientes(clientesData.map(c => ({ ...c, qr_count: contagem[c.nome] ?? 0 })));
+    setLoading(false);
+  }
+
+  const filtered = clientes.filter(c => {
     const q = search.toLowerCase();
-    const matchQ = c.nome.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+    const matchQ = c.nome.toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q);
     const matchS = filtroStatus === "Todos" || c.status === filtroStatus;
     const matchP = filtroPlano  === "Todos" || c.plano  === filtroPlano;
     return matchQ && matchS && matchP;
   });
 
-  const ativos    = CLIENTES.filter(c => c.status === "Ativo").length;
-  const pendentes = CLIENTES.filter(c => c.status === "Pendente").length;
-  const inativos  = CLIENTES.filter(c => c.status === "Inativo").length;
-  const totalQR   = CLIENTES.reduce((s, c) => s + c.qr, 0);
+  const ativos    = clientes.filter(c => c.status === "Ativo").length;
+  const pendentes = clientes.filter(c => c.status === "Pendente").length;
+  const inativos  = clientes.filter(c => c.status === "Inativo").length;
+  const totalQR   = clientes.reduce((s, c) => s + (c.qr_count ?? 0), 0);
 
   return (
     <>
-      <div className="page-header" style={{ marginBottom: 24 }}>
+      {/* Cabeçalho */}
+      <div className="page-header" style={{ marginBottom: 28 }}>
         <div>
           <h1 className="page-title">Clientes</h1>
           <p className="page-sub">Gerencie sua base de clientes</p>
         </div>
-        <button className="btn-primary" style={{ alignSelf: "flex-end" }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+        <button className="btn-primary" style={{ alignSelf: "center", marginTop: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           Novo Cliente
@@ -76,10 +107,10 @@ export default function Clientes() {
 
       {/* Métricas */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 24 }}>
-        <MetricCard label="Total de Clientes" value={CLIENTES.length} icon="👥" accent="#6366f1" />
+        <MetricCard label="Total de Clientes" value={clientes.length} icon="👥" accent="#6366f1" />
         <MetricCard label="Clientes Ativos"   value={ativos}          icon="✅" accent="#34d399" />
         <MetricCard label="Pendentes"          value={pendentes}       icon="⏳" accent="#f59e0b" />
-        <MetricCard label="QRCodes gerados"    value={totalQR}         icon="⬛" accent="#818cf8" />
+        <MetricCard label="Publicações"        value={totalQR}         icon="📄" accent="#818cf8" />
       </div>
 
       {/* Painel principal */}
@@ -87,7 +118,6 @@ export default function Clientes() {
 
         {/* Toolbar */}
         <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-          {/* Search */}
           <div style={{ position: "relative", flex: "1 1 220px", minWidth: 0 }}>
             <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--fg-muted)", pointerEvents: "none" }}
               width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -100,8 +130,6 @@ export default function Clientes() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-
-          {/* Filtros */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {STATUS_OPTS.map(s => (
               <button key={s} onClick={() => setFiltroStatus(s)}
@@ -124,7 +152,6 @@ export default function Clientes() {
               </button>
             ))}
           </div>
-
           <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
             {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
           </span>
@@ -132,18 +159,24 @@ export default function Clientes() {
 
         {/* Tabela */}
         <div style={{ overflowX: "auto" }}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="empty-state" style={{ padding: "60px 0" }}>
+              <div style={{ width: 28, height: 28, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+              <p style={{ marginTop: 12 }}>Carregando clientes…</p>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="empty-state" style={{ padding: "60px 0" }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <p>Nenhum cliente encontrado</p>
+              <p>{clientes.length === 0 ? "Nenhum cliente cadastrado" : "Nenhum cliente encontrado"}</p>
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  {["Cliente", "Contato", "Plano", "Status", "QRCodes", "Cadastro", ""].map(h => (
+                  {["Cliente", "Contato", "Plano", "Status", "Publicações", "Cadastro", ""].map(h => (
                     <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -154,62 +187,55 @@ export default function Clientes() {
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
 
-                    {/* Cliente */}
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatarColor(c.nome), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0, letterSpacing: 0 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatarColor(c.nome), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                           {iniciais(c.nome)}
                         </div>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 14, color: "var(--fg)" }}>{c.nome}</div>
-                          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 1 }}>ID #{c.id.toString().padStart(4, "0")}</div>
+                          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 1 }}>{c.email ?? "—"}</div>
                         </div>
                       </div>
                     </td>
 
-                    {/* Contato */}
                     <td style={{ padding: "14px 16px" }}>
-                      <div style={{ fontSize: 13, color: "var(--fg)" }}>{c.email}</div>
-                      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>{c.telefone}</div>
+                      <div style={{ fontSize: 13, color: "var(--fg)" }}>{c.email ?? "—"}</div>
+                      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>{c.telefone ?? "—"}</div>
                     </td>
 
-                    {/* Plano */}
                     <td style={{ padding: "14px 16px" }}>
-                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: planoStyle[c.plano].bg, color: planoStyle[c.plano].fg }}>
+                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: (planoStyle[c.plano] ?? planoStyle["Básico"]).bg, color: (planoStyle[c.plano] ?? planoStyle["Básico"]).fg }}>
                         {c.plano}
                       </span>
                     </td>
 
-                    {/* Status */}
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: statusStyle[c.status].dot, flexShrink: 0, boxShadow: `0 0 6px ${statusStyle[c.status].dot}` }} />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: statusStyle[c.status].dot }}>{c.status}</span>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: (statusStyle[c.status] ?? statusStyle["Inativo"]).dot, flexShrink: 0, boxShadow: `0 0 6px ${(statusStyle[c.status] ?? statusStyle["Inativo"]).dot}` }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: (statusStyle[c.status] ?? statusStyle["Inativo"]).dot }}>{c.status}</span>
                       </div>
                     </td>
 
-                    {/* QRCodes */}
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ height: 4, width: 60, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${Math.min((c.qr / 25) * 100, 100)}%`, background: "var(--accent)", borderRadius: 4, transition: "width .4s" }} />
+                          <div style={{ height: "100%", width: `${Math.min(((c.qr_count ?? 0) / 25) * 100, 100)}%`, background: "var(--accent)", borderRadius: 4 }} />
                         </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>{c.qr}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg)", fontVariantNumeric: "tabular-nums" }}>{c.qr_count ?? 0}</span>
                       </div>
                     </td>
 
-                    {/* Cadastro */}
-                    <td style={{ padding: "14px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{c.data}</td>
+                    <td style={{ padding: "14px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{fmtData(c.created_at)}</td>
 
-                    {/* Ações */}
                     <td style={{ padding: "14px 16px" }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <button title="Ver" style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, cursor: "pointer", fontWeight: 600, transition: "all .15s" }}
+                        <button style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, cursor: "pointer", fontWeight: 600, transition: "all .15s" }}
                           onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--accent)"; }}
                           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-muted)"; }}>
                           Ver
                         </button>
-                        <button title="Editar" style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid transparent", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600, transition: "opacity .15s" }}
+                        <button style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid transparent", background: "var(--accent)", color: "#fff", fontSize: 12, cursor: "pointer", fontWeight: 600, transition: "opacity .15s" }}
                           onMouseEnter={e => (e.currentTarget.style.opacity = ".85")}
                           onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
                           Editar
@@ -224,10 +250,12 @@ export default function Clientes() {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "12px 22px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--fg-muted)" }}>
-          <span>Exibindo {filtered.length} de {CLIENTES.length} clientes</span>
-          <span>{ativos} ativo{ativos !== 1 ? "s" : ""} · {inativos} inativo{inativos !== 1 ? "s" : ""} · {pendentes} pendente{pendentes !== 1 ? "s" : ""}</span>
-        </div>
+        {!loading && (
+          <div style={{ padding: "12px 22px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: "var(--fg-muted)" }}>
+            <span>Exibindo {filtered.length} de {clientes.length} cliente{clientes.length !== 1 ? "s" : ""}</span>
+            <span>{ativos} ativo{ativos !== 1 ? "s" : ""} · {inativos} inativo{inativos !== 1 ? "s" : ""} · {pendentes} pendente{pendentes !== 1 ? "s" : ""}</span>
+          </div>
+        )}
       </div>
     </>
   );
