@@ -269,7 +269,7 @@ export default function Controle() {
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
                   {["Cliente", "CPF", "Entrada", "Tempo", ""].map(h => (
-                    <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding: "11px 16px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>

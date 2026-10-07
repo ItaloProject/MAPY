@@ -315,7 +315,7 @@ export default function Pendentes() {
                     ? ["Nome", "CPF", "Protocolo", "Data", "Valor", "Agendado para", ""]
                     : ["Nome", "CPF", "Protocolo", "Data", "Valor", "Pago em", ""]
                   ).map(h => (
-                    <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ padding: "11px 16px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
