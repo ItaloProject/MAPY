@@ -399,9 +399,17 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
   function baixar() {
     if (!canvasRef.current) return;
     try {
-      const png = canvasRef.current.toDataURL("image/png");
+      const src = canvasRef.current;
+      const pad = 60;
+      const out = document.createElement("canvas");
+      out.width  = src.width  + pad * 2;
+      out.height = src.height + pad * 2;
+      const ctx = out.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(src, pad, pad);
       const a = document.createElement("a");
-      a.href = png;
+      a.href = out.toDataURL("image/png");
       a.download = `qrcode-${cliente.nome.split(" ")[0].toLowerCase()}.png`;
       a.click();
     } catch {}
@@ -426,7 +434,7 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
             <>
               {/* Canvas oculto para download — level="L" garantido */}
               <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-                <QRCodeCanvas ref={canvasRef} value={cliente.url} size={600} fgColor="#000000" bgColor="#ffffff" level="L" marginSize={4} />
+                <QRCodeCanvas ref={canvasRef} value={cliente.url} size={800} fgColor="#000000" bgColor="#ffffff" level="M" marginSize={2} />
               </div>
               <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
                 <QRDisplay cliente={cliente} size={260} />
