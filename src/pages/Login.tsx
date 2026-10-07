@@ -58,7 +58,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               <path d="M12 2L2 7v5c0 5.25 4.2 10.15 10 11.35C17.8 22.15 22 17.25 22 12V7L12 2z" fill="currentColor" opacity=".9"/>
             </svg>
           </div>
-          <span className="brand-name">Secure</span>
+          <span className="brand-name">e-mec.com.br</span>
         </div>
 
         {success ? (
