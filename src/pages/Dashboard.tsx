@@ -126,7 +126,7 @@ export default function Dashboard() {
         @keyframes sk { 0%,100%{opacity:.4} 50%{opacity:.9} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         .dash-animate { animation: fadeUp .35s ease both; }
-        .stat-new { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:4px; transition:border-color .15s, transform .15s; cursor:default; }
+        .stat-new { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:2px; transition:border-color .15s, transform .15s; cursor:default; }
         .stat-new:hover { border-color: var(--accent); transform: translateY(-2px); }
         .quick-btn { display:flex; flex-direction:column; align-items:center; gap:8px; padding:18px 12px; background:var(--surface); border:1px solid var(--border); border-radius:14px; cursor:pointer; transition:all .15s; color:var(--fg-muted); font-size:12px; font-weight:600; text-align:center; }
         .quick-btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-2px); background:rgba(14,165,233,0.04); }
@@ -170,61 +170,65 @@ export default function Dashboard() {
 
         {/* Clientes */}
         <div className="stat-new" onClick={() => navigate("/clientes")} style={{ cursor: "pointer" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(99,102,241,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#818cf8" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(99,102,241,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#818cf8", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             </div>
-            {!loading && deltaCliPct !== null && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: deltaCliPct >= 0 ? "#34d399" : "#f87171", background: deltaCliPct >= 0 ? "rgba(52,211,153,0.1)" : "rgba(248,113,113,0.1)", padding: "2px 8px", borderRadius: 20 }}>
-                {deltaCliPct >= 0 ? "+" : ""}{deltaCliPct}%
-              </span>
-            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                {loading ? <Sk w={40} h={22} /> : <span style={{ fontSize: 24, fontWeight: 800, color: "#818cf8", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtNum(clientes)}</span>}
+                {!loading && deltaCliPct !== null && <span style={{ fontSize: 10, fontWeight: 700, color: deltaCliPct >= 0 ? "#34d399" : "#f87171" }}>{deltaCliPct >= 0 ? "+" : ""}{deltaCliPct}%</span>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginTop: 2 }}>Total Clientes</div>
+            </div>
           </div>
-          {loading ? <Sk w={60} h={34} /> : <div style={{ fontSize: 34, fontWeight: 800, color: "#818cf8", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>{fmtNum(clientes)}</div>}
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginTop: 2 }}>Total Clientes</div>
-          {!loading && <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>{cliMes} novos este mês</div>}
         </div>
 
         {/* QRCodes */}
         <div className="stat-new" onClick={() => navigate("/qrcodes")} style={{ cursor: "pointer" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(52,211,153,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#34d399" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(52,211,153,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#34d399", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
             </div>
-            {!loading && <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.1)", padding: "2px 8px", borderRadius: 20 }}>+{qrMes} mês</span>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                {loading ? <Sk w={40} h={22} /> : <span style={{ fontSize: 24, fontWeight: 800, color: "#34d399", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtNum(qrcodes)}</span>}
+                {!loading && <span style={{ fontSize: 10, fontWeight: 700, color: "#34d399" }}>+{qrMes} mês</span>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginTop: 2 }}>QRCodes Gerados</div>
+            </div>
           </div>
-          {loading ? <Sk w={60} h={34} /> : <div style={{ fontSize: 34, fontWeight: 800, color: "#34d399", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>{fmtNum(qrcodes)}</div>}
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginTop: 2 }}>QRCodes Gerados</div>
-          {!loading && <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>{qrMes} publicações este mês</div>}
         </div>
 
         {/* Pendentes */}
         <div className="stat-new" onClick={() => navigate("/pendentes")} style={{ cursor: "pointer" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(251,191,36,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fbbf24" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(251,191,36,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fbbf24", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
-            {!loading && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: (pendentes ?? 0) > 0 ? "#fbbf24" : "#34d399", background: (pendentes ?? 0) > 0 ? "rgba(251,191,36,0.1)" : "rgba(52,211,153,0.1)", padding: "2px 8px", borderRadius: 20 }}>
-                {(pendentes ?? 0) > 0 ? "Atenção" : "Em dia"}
-              </span>
-            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                {loading ? <Sk w={40} h={22} /> : <span style={{ fontSize: 24, fontWeight: 800, color: "#fbbf24", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtNum(pendentes)}</span>}
+                {!loading && <span style={{ fontSize: 10, fontWeight: 700, color: (pendentes ?? 0) > 0 ? "#fbbf24" : "#34d399" }}>{(pendentes ?? 0) > 0 ? "Atenção" : "Em dia"}</span>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginTop: 2 }}>Pendentes</div>
+            </div>
           </div>
-          {loading ? <Sk w={60} h={34} /> : <div style={{ fontSize: 34, fontWeight: 800, color: "#fbbf24", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>{fmtNum(pendentes)}</div>}
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginTop: 2 }}>Pendentes</div>
-          {!loading && <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>{concluidos} concluídos no total</div>}
         </div>
 
         {/* Usuários */}
         <div className="stat-new" onClick={() => navigate("/usuarios")} style={{ cursor: "pointer" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(14,165,233,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#0ea5e9" }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(14,165,233,0.14)", display: "flex", alignItems: "center", justifyContent: "center", color: "#0ea5e9", flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                {loading ? <Sk w={40} h={22} /> : <span style={{ fontSize: 24, fontWeight: 800, color: "#0ea5e9", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{fmtNum(usuarios)}</span>}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-muted)", marginTop: 2 }}>Usuários Ativos</div>
             </div>
           </div>
-          {loading ? <Sk w={60} h={34} /> : <div style={{ fontSize: 34, fontWeight: 800, color: "#0ea5e9", letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums" }}>{fmtNum(usuarios)}</div>}
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", marginTop: 2 }}>Usuários Ativos</div>
-          {!loading && <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>operadores cadastrados</div>}
         </div>
       </div>
 
