@@ -3,7 +3,7 @@ import "../components/Layout.css";
 
 export default function Configuracoes() {
   const [nome, setNome] = useState("Italo Admin");
-  const [email] = useState("suporte.ferramentas@cgbengenharia.com.br");
+  const [email] = useState("italo.fontes2026@gmail.com");
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifSistema, setNotifSistema] = useState(true);
   const [notifPendentes, setNotifPendentes] = useState(false);

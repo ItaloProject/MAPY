@@ -24,5 +24,5 @@ create policy "admin_delete_usuarios"
 
 -- Seed: admin inicial
 insert into usuarios (nome, email, perfil, status, ultimo_acesso)
-values ('Italo Admin', 'suporte.ferramentas@cgbengenharia.com.br', 'Administrador', 'Ativo', now())
+values ('Italo Admin', 'italo.fontes2026@gmail.com', 'Administrador', 'Ativo', now())
 on conflict (email) do nothing;
