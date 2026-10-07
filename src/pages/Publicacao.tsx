@@ -388,7 +388,7 @@ function QRDisplay({ cliente, size = 220 }: { cliente: Cliente; size?: number })
 
 /* ── Modal QR ── */
 function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -397,16 +397,30 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
   }, [onClose]);
 
   function baixar() {
-    if (!canvasRef.current) return;
-    try {
-      const src = canvasRef.current;
-      const ctx = src.getContext("2d")!;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const cells = svg.viewBox.baseVal.width;
+    const px = Math.round(1200 / cells);
+    const total = cells * px;
+    svg.setAttribute("width", String(total));
+    svg.setAttribute("height", String(total));
+    const xml = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = total;
+      c.height = total;
+      const ctx = c.getContext("2d")!;
       ctx.imageSmoothingEnabled = false;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, total, total);
+      ctx.drawImage(img, 0, 0, total, total);
       const a = document.createElement("a");
-      a.href = src.toDataURL("image/png");
+      a.href = c.toDataURL("image/png");
       a.download = `qrcode-${cliente.nome.split(" ")[0].toLowerCase()}.png`;
       a.click();
-    } catch {}
+    };
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
   }
 
   return (
@@ -426,9 +440,9 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
         <div className="modal-body" style={{ alignItems: "center" }}>
           {cliente.url ? (
             <>
-              {/* Canvas oculto para download — level="L" garantido */}
+              {/* SVG oculto para download: versão 8 (49 módulos), sem borda */}
               <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-                <QRCodeCanvas ref={canvasRef} value={cliente.url} size={1000} fgColor="#000000" bgColor="#ffffff" level="M" marginSize={4} />
+                <QRCodeSVG ref={svgRef} value={cliente.url} size={490} fgColor="#000000" bgColor="#ffffff" level="L" minVersion={8} boostLevel={false} marginSize={0} />
               </div>
               <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
                 <QRDisplay cliente={cliente} size={260} />
