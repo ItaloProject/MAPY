@@ -1,0 +1,161 @@
+/* ── Breadcrumb ── */
+.breadcrumb-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.breadcrumb-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font);
+}
+.breadcrumb-btn:hover { text-decoration: underline; }
+.breadcrumb-sep { color: var(--fg-muted); }
+.breadcrumb-current { color: var(--fg-muted); font-weight: 500; }
+
+/* ── Tabs bar ── */
+.pub-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 4px;
+  gap: 2px;
+  overflow-x: auto;
+}
+.pub-tab {
+  padding: 13px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font);
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+.pub-tab:hover { color: var(--fg); }
+.pub-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Tab content ── */
+.pub-tab-content { min-height: 320px; }
+.tab-body { padding: 20px; }
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Edit form ── */
+.edit-sections { display: flex; flex-direction: column; gap: 24px; }
+.edit-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.edit-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  padding: 16px;
+}
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-group--full { grid-column: 1 / -1; }
+.edit-label { font-size: 12px; font-weight: 600; color: var(--fg-muted); }
+.edit-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--fg);
+  outline: none;
+  font-family: var(--font);
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.edit-input:focus { border-color: var(--border-focus); }
+.edit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.save-msg { font-size: 13px; color: var(--success); }
+
+@media (max-width: 540px) {
+  .edit-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Preview ── */
+.preview-wrap { max-width: 500px; margin: 0 auto; }
+.preview-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 14px;
+  text-align: center;
+}
+.preview-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.preview-intro {
+  padding: 16px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+.preview-intro strong { display: block; font-size: 14px; font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+.prev-section { border-bottom: 1px solid var(--border); }
+.prev-section:last-child { border-bottom: none; }
+.prev-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  padding: 10px 16px 8px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.prev-rows { padding: 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+.prev-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.prev-label { font-weight: 700; color: var(--fg); }
+.prev-value { color: var(--fg-muted); }

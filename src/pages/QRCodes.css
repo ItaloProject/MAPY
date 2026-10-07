@@ -1,0 +1,108 @@
+.grupos-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 780px;
+}
+
+.grupo-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 24px;
+  background: var(--surface);
+  border: 1px solid var(--borda, var(--border));
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+  transition: border-color 0.18s, background 0.18s, transform 0.12s, box-shadow 0.18s;
+  width: 100%;
+}
+.grupo-card:hover {
+  border-color: var(--cor, var(--accent));
+  background: var(--bg, var(--surface-2));
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+}
+.grupo-card--vazio {
+  border-style: dashed;
+  cursor: default;
+  opacity: 0.55;
+}
+.grupo-card--vazio:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.grupo-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.grupo-info {
+  flex: 1;
+  min-width: 0;
+}
+.grupo-nome {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+.grupo-desc {
+  font-size: 13px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grupo-meta {
+  display: flex;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.grupo-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.grupo-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.grupo-stat-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.grupo-arrow {
+  color: var(--fg-muted);
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+.grupo-card:hover .grupo-arrow {
+  color: var(--cor, var(--accent));
+  transform: translateX(3px);
+}
+
+@media (max-width: 540px) {
+  .grupo-card { flex-wrap: wrap; gap: 14px; }
+  .grupo-meta { gap: 14px; }
+  .grupo-arrow { display: none; }
+}

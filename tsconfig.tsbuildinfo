@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/layout.tsx","./src/lib/supabase.ts","./src/pages/clientes.tsx","./src/pages/configuracoes.tsx","./src/pages/dashboard.tsx","./src/pages/login.tsx","./src/pages/pendentes.tsx","./src/pages/pubviewer.tsx","./src/pages/publicacao.tsx","./src/pages/qrcodes.tsx","./src/pages/usuarios.tsx"],"version":"5.9.3"}
