@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "../components/Layout.css";
+import "./Usuarios.css";
 import { supabase } from "../lib/supabase";
 
 type Usuario = {
@@ -133,6 +134,12 @@ export default function Usuarios() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3500); }
 
+  function abrirCriar() {
+    setForm({ nome: "", email: "", perfil: "Operador" });
+    setFormErr(null);
+    setModal("criar");
+  }
+
   function fecharModal() { setModal(null); setAlvo(null); setFormErr(null); setSaving(false); }
 
   async function copiar(texto: string, tipo: "mat"|"pwd") {
@@ -265,16 +272,16 @@ export default function Usuarios() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 10, padding: "12px 20px", fontSize: 13, color: "var(--fg)", boxShadow: "0 8px 32px rgba(0,0,0,.3)", animation: "fadeUp .2s ease" }}>
+        <div className="usr-toast" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 10, padding: "12px 20px", fontSize: 13, color: "var(--fg)", boxShadow: "0 8px 32px rgba(0,0,0,.3)", animation: "fadeUp .2s ease" }}>
           ✓ {toast}
         </div>
       )}
 
       {/* Modal overlay */}
       {modal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        <div className="usr-backdrop" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
           onClick={e => e.target === e.currentTarget && modal !== "credenciais" && fecharModal()}>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 460, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
+          <div className="usr-sheet" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 460, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,.5)" }}>
 
             {/* CRIAR */}
             {modal === "criar" && (
@@ -297,7 +304,7 @@ export default function Usuarios() {
                 <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 14, marginBottom: 0 }}>
                   A matrícula e senha forte serão geradas automaticamente.
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
+                <div className="usr-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
                   <button onClick={fecharModal} style={btnSecSt}>Cancelar</button>
                   <button onClick={criarUsuario} disabled={saving} style={btnPrimSt}>
                     {saving ? "Criando…" : "Criar Usuário"}
@@ -343,7 +350,7 @@ export default function Usuarios() {
                     ? <><strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> não poderá mais entrar no sistema. Pode ser reativado a qualquer momento.</>
                     : <><strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> terá o acesso restaurado.</>}
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <div className="usr-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={fecharModal} style={btnSecSt}>Cancelar</button>
                   <button onClick={alternarStatus} disabled={saving} style={{ ...btnPrimSt, background: alvo.status === "Ativo" ? "#ef4444" : "#10b981" }}>
                     {saving ? "Aguarde…" : alvo.status === "Ativo" ? "Suspender" : "Reativar"}
@@ -362,7 +369,7 @@ export default function Usuarios() {
                 <p style={{ margin: "0 0 20px", fontSize: 13, color: "#fbbf24" }}>
                   ⚠ A senha atual será invalidada imediatamente.
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <div className="usr-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={fecharModal} style={btnSecSt}>Cancelar</button>
                   <button onClick={resetarSenha} disabled={saving} style={btnPrimSt}>
                     {saving ? "Gerando…" : "Gerar nova senha"}
@@ -378,7 +385,7 @@ export default function Usuarios() {
                 <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
                   Esta ação é <strong>irreversível</strong>. <strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> (matrícula {alvo.matricula ?? "—"}) será removido permanentemente.
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <div className="usr-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={fecharModal} style={btnSecSt}>Cancelar</button>
                   <button onClick={apagarUsuario} disabled={saving} style={{ ...btnPrimSt, background: "#ef4444" }}>
                     {saving ? "Removendo…" : "Apagar definitivamente"}
@@ -391,40 +398,40 @@ export default function Usuarios() {
       )}
 
       {/* Cabeçalho */}
-      <div className="page-header" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="page-header usr-head">
         <div>
           <h1 className="page-title">Usuários</h1>
           <p className="page-sub">{loading ? "…" : `${usuarios.length} usuário${usuarios.length !== 1 ? "s" : ""} do sistema`}</p>
         </div>
-        <button className="btn-primary" onClick={() => { setForm({ nome: "", email: "", perfil: "Operador" }); setFormErr(null); setModal("criar"); }}>
+        <button className="btn-primary usr-new" onClick={abrirCriar}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Novo Usuário
         </button>
       </div>
 
       {/* Métricas */}
-      <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+      <div className="usr-metrics">
         {[
           { label: "Total", val: usuarios.length, color: "#818cf8", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, bg: "rgba(129,140,248,0.12)" },
           { label: "Ativos",    val: ativos,    color: "#34d399", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, bg: "rgba(52,211,153,0.12)" },
           { label: "Suspensos", val: suspensos, color: "#f87171", icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>, bg: "rgba(248,113,113,0.12)" },
         ].map(m => (
-          <div key={m.label} className="section-card" style={{ padding: "16px 22px", margin: 0, display: "flex", alignItems: "center", gap: 14, flex: "1 1 140px" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: m.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>{m.icon}</div>
+          <div key={m.label} className="section-card usr-metric">
+            <div className="usr-metric-ico" style={{ background: m.bg }}>{m.icon}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: m.color, lineHeight: 1 }}>{loading ? "…" : m.val}</div>
-              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 3 }}>{m.label}</div>
+              <div className="usr-metric-val" style={{ color: m.color }}>{loading ? "…" : m.val}</div>
+              <div className="usr-metric-lbl">{m.label}</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Tabela */}
-      <div className="section-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--fg)" }}>Equipe</span>
+      {/* Lista */}
+      <div className={`section-card usr-card${!loading && usuarios.length > 0 ? " usr-card--list" : ""}`}>
+        <div className="usr-card-hd">
+          <span>Equipe</span>
         </div>
-        <div style={{ overflowX: "auto" }}>
+        <div className="usr-scroll">
           {loading ? (
             <div className="empty-state" style={{ padding: "60px 0" }}>
               <div style={{ width: 26, height: 26, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin .7s linear infinite" }} />
@@ -434,12 +441,10 @@ export default function Usuarios() {
           ) : usuarios.length === 0 ? (
             <div className="empty-state" style={{ padding: "60px 0" }}><p>Nenhum usuário cadastrado.</p></div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="usr-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  {["Usuário", "Matrícula", "Perfil", "Status", "Último acesso", ""].map(h => (
-                    <th key={h} style={{ padding: "11px 16px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
+                <tr>
+                  {["Usuário", "Matrícula", "Perfil", "Status", "Último acesso", ""].map((h, i) => <th key={i}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -447,49 +452,43 @@ export default function Usuarios() {
                   const sc = statusColor[u.status] ?? statusColor["Ativo"];
                   const pc = perfilColor[u.perfil] ?? perfilColor["Visualizador"];
                   return (
-                    <tr key={u.id} style={{ borderBottom: "1px solid var(--border)", transition: "background .12s" }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-
-                      <td style={{ padding: "14px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ width: 38, height: 38, borderRadius: "50%", background: avatarColor(u.nome), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-                            {iniciais(u.nome)}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--fg)" }}>{u.nome}</div>
-                            <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 1 }}>{u.email ?? "—"}</div>
+                    <tr key={u.id} className="usr-row">
+                      <td className="usr-user">
+                        <div className="usr-who">
+                          <div className="usr-avatar" style={{ background: avatarColor(u.nome) }}>{iniciais(u.nome)}</div>
+                          <div className="usr-who-txt">
+                            <div className="usr-nome">{u.nome}</div>
+                            <div className="usr-email">{u.email ?? "—"}</div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Matrícula */}
-                      <td style={{ padding: "14px 16px" }}>
+                      <td className="usr-line usr-mat" data-label="Matrícula">
                         {u.matricula ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 800, color: "var(--accent)", letterSpacing: "0.05em" }}>{u.matricula}</span>
-                            <button onClick={() => copiar(u.matricula!, "mat")} title="Copiar matrícula" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-muted)", padding: 2, display: "flex" }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                          <div className="usr-mat-wrap">
+                            <span className="usr-mat-num">{u.matricula}</span>
+                            <button className="usr-copy" onClick={() => copiar(u.matricula!, "mat")} title="Copiar matrícula" aria-label="Copiar matrícula">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                             </button>
                           </div>
                         ) : <span style={{ color: "var(--fg-muted)", fontSize: 13 }}>—</span>}
                       </td>
 
-                      <td style={{ padding: "14px 16px" }}>
-                        <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: pc.bg, color: pc.fg }}>{u.perfil}</span>
+                      <td className="usr-perfil">
+                        <span className="usr-chip" style={{ background: pc.bg, color: pc.fg }}>{u.perfil}</span>
                       </td>
 
-                      <td style={{ padding: "14px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: sc.dot, boxShadow: `0 0 6px ${sc.dot}`, flexShrink: 0 }} />
+                      <td className="usr-line usr-status" data-label="Status">
+                        <div className="usr-status-wrap">
+                          <span className="usr-dot" style={{ background: sc.dot, boxShadow: `0 0 6px ${sc.dot}` }} />
                           <span style={{ fontSize: 13, fontWeight: 600, color: sc.fg }}>{u.status}</span>
                         </div>
                       </td>
 
-                      <td style={{ padding: "14px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{fmtData(u.ultimo_acesso)}</td>
+                      <td className="usr-line usr-ultimo" data-label="Último acesso">{fmtData(u.ultimo_acesso)}</td>
 
-                      <td style={{ padding: "14px 16px" }}>
-                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <td className="usr-acoes">
+                        <div className="usr-btns">
                           <ABtn color={u.status === "Ativo" ? "#f87171" : "#34d399"} onClick={() => { setAlvo(u); setModal("suspender"); }}>
                             {u.status === "Ativo" ? "Suspender" : "Reativar"}
                           </ABtn>
@@ -502,6 +501,7 @@ export default function Usuarios() {
                           )}
                           <ABtn color="#f87171" onClick={() => { setAlvo(u); setModal("apagar"); }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            <span className="usr-abtn-txt">Apagar</span>
                           </ABtn>
                         </div>
                       </td>
@@ -512,12 +512,18 @@ export default function Usuarios() {
             </table>
           )}
         </div>
-        {!loading && (
-          <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--fg-muted)" }}>
+        {!loading && usuarios.length > 0 && (
+          <div className="usr-foot">
             {ativos} ativo{ativos !== 1 ? "s" : ""} · {suspensos} suspenso{suspensos !== 1 ? "s" : ""}
           </div>
         )}
       </div>
+
+      <button className="usr-fab" onClick={abrirCriar} aria-label="Novo usuário">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
     </>
   );
 }
@@ -535,7 +541,7 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 
 function ABtn({ children, color, onClick }: { children: React.ReactNode; color?: string; onClick: () => void }) {
   return (
-    <button onClick={onClick}
+    <button className="usr-abtn" onClick={onClick}
       style={{ padding: "5px 10px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: color ?? "var(--fg-muted)", fontSize: 12, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}
       onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = color ?? "var(--accent)"; b.style.color = color ?? "var(--accent)"; }}
       onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; b.style.color = color ?? "var(--fg-muted)"; }}>

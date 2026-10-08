@@ -1,0 +1,100 @@
+/* ── Cabeçalho / métricas ── */
+.usr-head { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.usr-fab { display: none; }
+.usr-metrics { display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+.usr-metric { padding: 16px 22px; margin: 0; display: flex; align-items: center; gap: 14px; flex: 1 1 140px; }
+.usr-metric-ico { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.usr-metric-val { font-size: 22px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.usr-metric-lbl { font-size: 12px; color: var(--fg-muted); margin-top: 3px; }
+
+/* ── Tabela (desktop) ── */
+.usr-card { padding: 0; overflow: hidden; }
+.usr-card-hd { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 700; color: var(--fg); }
+.usr-scroll { overflow-x: auto; }
+.usr-table { width: 100%; border-collapse: collapse; }
+.usr-table th {
+  padding: 11px 16px; text-align: center; font-size: 11px; font-weight: 700; color: var(--fg-muted);
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.usr-row { border-bottom: 1px solid var(--border); transition: background .12s; }
+.usr-row:hover { background: var(--surface-2); }
+.usr-table td { padding: 14px 16px; }
+.usr-who { display: flex; align-items: center; gap: 12px; }
+.usr-avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0; }
+.usr-who-txt { min-width: 0; }
+.usr-nome { font-weight: 700; font-size: 14px; color: var(--fg); }
+.usr-email { font-size: 12px; color: var(--fg-muted); margin-top: 1px; overflow-wrap: anywhere; }
+.usr-mat-wrap { display: flex; align-items: center; gap: 8px; }
+.usr-mat-num { font-family: monospace; font-size: 15px; font-weight: 800; color: var(--accent); letter-spacing: .05em; }
+.usr-copy { background: none; border: 0; cursor: pointer; color: var(--fg-muted); padding: 2px; display: flex; }
+.usr-chip { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.usr-status-wrap { display: flex; align-items: center; gap: 6px; }
+.usr-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.usr-ultimo { font-size: 13px; color: var(--fg-muted); white-space: nowrap; }
+.usr-btns { display: flex; gap: 6px; justify-content: flex-end; }
+.usr-abtn-txt { display: none; }
+.usr-foot { padding: 12px 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--fg-muted); }
+
+.usr-sheet { background: #0f1a27 !important; }
+
+/* ── Celular: cartões, métricas compactas, botão flutuante e folhas ── */
+@media (max-width: 768px) {
+  .usr-head { margin-bottom: 16px !important; }
+  .usr-new { display: none; }
+
+  .usr-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .usr-metric { flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; text-align: center; }
+  .usr-metric-ico { width: 34px; height: 34px; }
+  .usr-metric-val { font-size: 22px; }
+  .usr-metric-lbl { margin-top: 4px; }
+
+  .usr-card--list { background: none; border: 0; border-radius: 0; overflow: visible; margin-bottom: 0; }
+  .usr-card--list .usr-card-hd { padding: 0 2px 12px; border: 0; font-size: 14px; }
+  .usr-scroll { overflow: visible; }
+  .usr-table, .usr-table tbody { display: block; }
+  .usr-table thead { display: none; }
+  .usr-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: 14px; margin-bottom: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  }
+  .usr-row:hover { background: var(--surface); }
+  .usr-table td { display: block; padding: 0; }
+  .usr-table td.usr-user { grid-column: 1; grid-row: 1; min-width: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); padding-right: 10px; }
+  .usr-table td.usr-perfil { grid-column: 2; grid-row: 1; align-self: stretch; display: flex; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .usr-table td.usr-line {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-top: 12px; font-size: 14px; color: var(--fg);
+  }
+  .usr-table td.usr-line::before {
+    content: attr(data-label); flex-shrink: 0; font-family: var(--font); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted);
+  }
+  .usr-copy { padding: 8px; margin: -6px -6px -6px 0; }
+  .usr-table td.usr-acoes { grid-column: 1 / -1; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .usr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .usr-btns .usr-abtn { min-height: 46px; justify-content: center; font-size: 13px !important; border-radius: 10px !important; padding: 0 10px !important; }
+  .usr-btns .usr-abtn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .usr-abtn-txt { display: inline; }
+  .usr-foot { border: 0; padding: 2px 4px 18px; text-align: center; font-size: 13px; }
+
+  .usr-fab {
+    display: flex; align-items: center; justify-content: center; position: fixed; z-index: 50;
+    right: 18px; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
+    border: 0; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 8px 24px rgba(14, 165, 233, .45);
+    -webkit-tap-highlight-color: transparent; transition: transform .12s;
+  }
+  .usr-fab:active { transform: scale(.93); }
+
+  .usr-toast { left: 14px !important; right: 14px !important; bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
+
+  .usr-backdrop { align-items: flex-end !important; padding: 0 !important; }
+  .usr-sheet {
+    max-width: none !important; border-radius: 20px 20px 0 0 !important; max-height: 92vh; max-height: 92dvh; overflow-y: auto;
+    padding: 22px 18px calc(18px + env(safe-area-inset-bottom, 0px)) !important; animation: usrSheetUp .25s ease;
+  }
+  @keyframes usrSheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .usr-sheet input, .usr-sheet select { font-size: 16px !important; min-height: 48px; }
+  .usr-sheet button { min-height: 46px; }
+  .usr-actions { margin-top: 20px !important; }
+  .usr-actions button { flex: 1; font-size: 15px !important; border-radius: 10px !important; }
+}

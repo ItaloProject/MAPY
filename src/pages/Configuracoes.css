@@ -1,0 +1,47 @@
+.cfg-grid { display: grid; gap: 20px; max-width: 640px; margin: 0 auto; width: 100%; }
+.cfg-body { padding: 20px; }
+.cfg-profile { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.cfg-avatar { width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cfg-name { font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+.cfg-role { font-size: 13px; color: var(--fg-muted); }
+.cfg-fields { display: flex; flex-direction: column; gap: 14px; }
+.cfg-label { display: block; font-size: 13px; font-weight: 600; color: var(--fg-muted); margin-bottom: 6px; }
+.cfg-input {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px;
+  font-size: 14px; color: var(--fg); outline: none; font-family: var(--font);
+}
+.cfg-input:focus { border-color: var(--border-focus); }
+.cfg-input:disabled { color: var(--fg-muted); cursor: not-allowed; }
+.cfg-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cfg-saved { font-size: 13px; color: var(--success); }
+
+.cfg-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cfg-switch-row > div:first-child { min-width: 0; }
+.cfg-switch-title { font-size: 14px; font-weight: 500; color: var(--fg); }
+.cfg-switch-sub { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.cfg-toggle { width: 44px; height: 24px; border-radius: 12px; border: 0; cursor: pointer; background: var(--border); position: relative; flex-shrink: 0; transition: background .2s; -webkit-tap-highlight-color: transparent; }
+.cfg-toggle.is-on { background: var(--accent); }
+.cfg-knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.cfg-toggle.is-on .cfg-knob { transform: translateX(20px); }
+
+.cfg-sec { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.cfg-sec .btn-sm { align-self: flex-start; }
+
+@media (max-width: 768px) {
+  .cfg-grid { gap: 14px; }
+  .cfg-body { padding: 16px; }
+  .cfg-profile { margin-bottom: 20px; }
+  .cfg-input { min-height: 48px; font-size: 16px; }
+
+  .cfg-foot { flex-direction: column-reverse; align-items: stretch; padding: 14px 16px; }
+  .cfg-foot .btn-primary { min-height: 48px; font-size: 15px; border-radius: 10px; }
+  .cfg-saved { text-align: center; }
+
+  .cfg-switch-row { min-height: 56px; }
+  .cfg-toggle { width: 54px; height: 32px; border-radius: 16px; }
+  .cfg-knob { top: 4px; left: 4px; width: 24px; height: 24px; }
+  .cfg-toggle.is-on .cfg-knob { transform: translateX(22px); }
+
+  .cfg-sec { padding: 16px; }
+  .cfg-sec .btn-sm { align-self: stretch; min-height: 48px; font-size: 14px; border-radius: 10px; text-align: center; }
+}
