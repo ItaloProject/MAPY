@@ -176,12 +176,9 @@ export default function PubViewer() {
   );
 
   if (desativado) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg, color: fg, padding: 20 }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
-        <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>Publicação desativada</h2>
-        <p style={{ color: "#888", margin: 0, fontSize: 14 }}>Esta publicação foi temporariamente desativada.<br />Entre em contato com a instituição para mais informações.</p>
-      </div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg }}>
+      <div style={{ width: 36, height: 36, border: "3px solid #ccc", borderTopColor: "#0055aa", borderRadius: "50%", animation: "pubSpin .7s linear infinite" }} />
+      <style>{`@keyframes pubSpin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
