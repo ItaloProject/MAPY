@@ -1,8 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import "./Layout.css";
 import { supabase } from "../lib/supabase";
 import { iniciais, type UsuarioLogado } from "../lib/usuario";
+
+const TITULOS: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/clientes": "Controle",
+  "/qrcodes": "QRCodes",
+  "/qrcodes/publicacao": "Publicação",
+  "/pendentes": "Pendentes",
+  "/usuarios": "Usuários",
+  "/configuracoes": "Configurações",
+};
 
 const navBase = [
   {
@@ -41,6 +51,27 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
   const [pendentes,   setPendentes]   = useState(0);
   const navigate  = useNavigate();
   const location  = useLocation();
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 768px)").matches);
+  const mini = collapsed && !isMobile;
+  const titulo = TITULOS[location.pathname.replace(/\/+$/, "")] ?? "Painel de controle";
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const on = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
+  // Fecha o menu com Esc
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  // Deslizar o menu para a esquerda fecha
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   // Fecha drawer ao trocar de rota
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -73,7 +104,16 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
         <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />
       )}
 
-      <aside className="sidebar">
+      <aside
+        className="sidebar"
+        onTouchStart={e => { swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+        onTouchEnd={e => {
+          const a = swipe.current; swipe.current = null;
+          if (!a || !mobileOpen) return;
+          const dx = e.changedTouches[0].clientX - a.x, dy = e.changedTouches[0].clientY - a.y;
+          if (dx < -60 && Math.abs(dy) < Math.abs(dx) * 0.6) setMobileOpen(false);
+        }}
+      >
         <div className="sidebar-header">
           <div className="sidebar-brand">
             <div className="sidebar-logo">
@@ -81,11 +121,16 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
                 <path d="M12 2L2 7v5c0 5.25 4.2 10.15 10 11.35C17.8 22.15 22 17.25 22 12V7L12 2z" fill="currentColor"/>
               </svg>
             </div>
-            {!collapsed && <span className="sidebar-title">e-mec.com.br</span>}
+            {!mini && <span className="sidebar-title">e-mec.com.br</span>}
           </div>
+          <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Fechar menu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
           <button className="sidebar-toggle" onClick={() => setCollapsed(v => !v)} aria-label="Recolher menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {collapsed ? <path d="M9 18l6-6-6-6"/> : <path d="M15 18l-6-6 6-6"/>}
+              {mini ? <path d="M9 18l6-6-6-6"/> : <path d="M15 18l-6-6 6-6"/>}
             </svg>
           </button>
         </div>
@@ -96,9 +141,9 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}>
                 <span className="nav-icon">{item.icon}</span>
-                {!collapsed && <span className="nav-label">{item.label}</span>}
-                {!collapsed && badge > 0 ? <span className="nav-badge">{badge}</span> : null}
-                {collapsed  && badge > 0 ? <span className="nav-badge nav-badge--dot" /> : null}
+                {!mini && <span className="nav-label">{item.label}</span>}
+                {!mini && badge > 0 ? <span className="nav-badge">{badge}</span> : null}
+                {mini  && badge > 0 ? <span className="nav-badge nav-badge--dot" /> : null}
               </NavLink>
             );
           })}
@@ -107,14 +152,14 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
         <div className="sidebar-footer">
           <div className="user-info">
             <div className="user-avatar">{siglas}</div>
-            {!collapsed && (
+            {!mini && (
               <div className="user-meta">
                 <span className="user-name">{nomeUsuario}</span>
                 <span className="user-role">{perfil ?? ""}</span>
               </div>
             )}
           </div>
-          {!collapsed && (
+          {!mini && (
             <button className="btn-logout" onClick={() => { onLogout?.(); navigate("/4c7913fce5eb"); }} title="Sair">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>
@@ -135,10 +180,10 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
                 <line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
-            <div className="breadcrumb" id="page-title">Painel de controle</div>
+            <div className="breadcrumb" id="page-title">{titulo}</div>
           </div>
           <div className="topbar-right">
-            <button className="topbar-btn" title="Notificações">
+            <button className="topbar-btn" title="Pendentes" onClick={() => navigate("/pendentes")}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
               </svg>

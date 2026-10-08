@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../components/Layout.css";
+import "./Clientes.css";
 import { supabase } from "../lib/supabase";
 import { sincronizarPublicacoes } from "../lib/controle";
 
@@ -160,7 +161,7 @@ export default function Controle() {
       {modal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
           onClick={e => e.target === e.currentTarget && (setModal(false), setNome(""), setCpf(""), setCpfErr(""))}>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, width: "100%", maxWidth: 400, padding: 30, boxShadow: "0 24px 64px rgba(0,0,0,.5)" }}>
+          <div className="ctl-modal-box" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, width: "100%", maxWidth: 400, padding: 30, boxShadow: "0 24px 64px rgba(0,0,0,.5)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(14,165,233,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <RobotIcon size={22} color="var(--accent)" />
@@ -205,23 +206,20 @@ export default function Controle() {
       )}
 
       {/* Cabeçalho com robô */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          {/* Robô animado */}
-          <div style={{ animation: "float 3s ease-in-out infinite", flexShrink: 0 }}>
-            <RobotFull />
-          </div>
-          <div>
+      <div className="ctl-head">
+        <div className="ctl-head-main">
+          <div className="ctl-robot"><RobotFull /></div>
+          <div style={{ minWidth: 0 }}>
             <h1 className="page-title">Controle</h1>
             <p className="page-sub">Gerencie clientes pendentes e concluídos</p>
-            <div style={{ display: "flex", gap: 14, marginTop: 10 }}>
+            <div className="ctl-pills">
               <Pill label="Pendentes" count={pendentes.length} color="#f59e0b" />
               <Pill label="Concluídos" count={concluidos.length} color="#34d399" />
             </div>
           </div>
         </div>
-        <button className="btn-primary" style={{ alignSelf: "center" }} onClick={() => setModal(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+        <button className="btn-primary ctl-new" onClick={() => setModal(true)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           Novo Cliente
@@ -229,34 +227,19 @@ export default function Controle() {
       </div>
 
       {/* Abas + busca */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {(["Pendente", "Concluído"] as ControleStatus[]).map(t => (
-          <button key={t} onClick={() => { setAba(t); setSearch(""); }} style={{
-            padding: "8px 18px", borderRadius: 8, border: "1px solid", fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all .15s",
-            background: aba === t ? (t === "Pendente" ? "#f59e0b" : "#10b981") : "transparent",
-            borderColor: aba === t ? (t === "Pendente" ? "#f59e0b" : "#10b981") : "var(--border)",
-            color: aba === t ? "#000" : "var(--fg-muted)",
-          }}>
-            {t === "Pendente" ? "Pendentes" : "Concluídos"}
-            <span style={{ marginLeft: 7, fontSize: 11, fontWeight: 800, background: "rgba(0,0,0,0.15)", padding: "1px 7px", borderRadius: 20 }}>
-              {t === "Pendente" ? pendentes.length : concluidos.length}
-            </span>
-          </button>
-        ))}
+      <div className="ctl-toolbar">
+        <div className="ctl-tabs">
+          {(["Pendente", "Concluído"] as ControleStatus[]).map(t => (
+            <button key={t} onClick={() => { setAba(t); setSearch(""); }}
+              className={`ctl-tab ${t === "Pendente" ? "ctl-tab--pend" : "ctl-tab--conc"}${aba === t ? " is-active" : ""}`}>
+              {t === "Pendente" ? "Pendentes" : "Concluídos"}
+              <span className="ctl-tab-count">{t === "Pendente" ? pendentes.length : concluidos.length}</span>
+            </button>
+          ))}
+        </div>
 
-        {/* Ordenação */}
-        <button
-          onClick={() => setOrdem(o => o === "desc" ? "asc" : "desc")}
-          title={ordem === "desc" ? "Mostrando mais recentes primeiro" : "Mostrando mais antigos primeiro"}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
-            background: "transparent", color: "var(--fg-muted)", fontSize: 12,
-            fontWeight: 600, cursor: "pointer", transition: "all .15s", whiteSpace: "nowrap",
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--accent)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--accent)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-muted)"; }}
-        >
+        <button className="ctl-sort" onClick={() => setOrdem(o => o === "desc" ? "asc" : "desc")}
+          title={ordem === "desc" ? "Mostrando mais recentes primeiro" : "Mostrando mais antigos primeiro"}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             {ordem === "desc"
               ? <><line x1="12" y1="20" x2="12" y2="4"/><polyline points="18 10 12 4 6 10"/></>
@@ -266,19 +249,14 @@ export default function Controle() {
           {ordem === "desc" ? "Mais recentes" : "Mais antigos"}
         </button>
 
-        {/* Busca */}
-        <div style={{ position: "relative", marginLeft: "auto", minWidth: 220 }}>
-          <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-muted)", pointerEvents: "none" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou CPF…"
-            style={{ ...inputSt, paddingLeft: 32, fontSize: 13 }}
-          />
+        <div className="ctl-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou CPF…" />
         </div>
       </div>
 
       {/* Lista */}
-      <div className="section-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className={`section-card ctl-card${!loading && lista.length > 0 ? " ctl-card--list" : ""}`}>
         {loading ? (
           <div className="empty-state" style={{ padding: "60px 0" }}>
             <div style={{ width: 26, height: 26, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin .7s linear infinite" }} />
@@ -293,89 +271,65 @@ export default function Controle() {
           </div>
         ) : (
           <>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="ctl-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  {["Cliente", "CPF", "Entrada", "Tempo", ""].map(h => (
-                    <th key={h} style={{ padding: "11px 16px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
+                <tr>
+                  <th>Cliente</th><th>CPF</th><th>Entrada</th><th>Tempo</th><th aria-label="Ações" />
                 </tr>
               </thead>
               <tbody>
                 {lista.map(r => (
-                  <tr key={r.id} style={{ borderBottom: "1px solid var(--border)", transition: "background .12s" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-
-                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: avatarColor(r.nome), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
-                          {iniciais(r.nome)}
-                        </div>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--fg)" }}>{r.nome}</span>
+                  <tr key={r.id} className="ctl-row">
+                    <td className="c-cliente">
+                      <div className="c-who">
+                        <div className="c-avatar" style={{ background: avatarColor(r.nome) }}>{iniciais(r.nome)}</div>
+                        <span className="c-nome">{r.nome}</span>
                       </div>
                     </td>
 
-                    <td style={{ padding: "14px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "var(--fg-muted)" }}>
+                    <td className="c-cpf" data-label="CPF">
                       {r.cpf ? fmtCPF(r.cpf) : <span style={{ opacity: 0.4 }}>—</span>}
                     </td>
 
-                    <td style={{ padding: "14px 16px", textAlign: "center", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
-                      {fmtData(r.created_at)}
-                    </td>
+                    <td className="c-entrada" data-label="Entrada">{fmtData(r.created_at)}</td>
 
-                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
-                      <span style={{
-                        fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
-                        background: aba === "Pendente" ? "rgba(245,158,11,0.12)" : "rgba(52,211,153,0.12)",
-                        color: aba === "Pendente" ? "#f59e0b" : "#34d399",
-                      }}>
+                    <td className="c-tempo">
+                      <span className={`ctl-chip ${aba === "Pendente" ? "ctl-chip--pend" : "ctl-chip--conc"}`}>
                         {diasDesde(r.created_at)}
                       </span>
                     </td>
 
-                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                    <td className="c-acoes">
                       {publicados.has(r.id) ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, background: "rgba(52,211,153,0.12)", color: "#34d399", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        <span className="ctl-done">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           Concluído
                         </span>
                       ) : (
-                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                        {/* Botão Fazer → navega para /qrcodes/publicacao com nome e CPF */}
-                        <button
-                          onClick={() => navigate("/qrcodes/publicacao", { state: { nome: r.nome, cpf: r.cpf ?? "" } })}
-                          style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-                        >
-                          Fazer
-                        </button>
-
-                        {aba === "Pendente" ? (
-                          <button onClick={() => concluir(r.id, r.nome)} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                            ✓ Concluir
+                        <div className="ctl-actions">
+                          {/* Fazer → navega para /qrcodes/publicacao com nome e CPF */}
+                          <button className="ctl-btn ctl-btn--fazer"
+                            onClick={() => navigate("/qrcodes/publicacao", { state: { nome: r.nome, cpf: r.cpf ?? "" } })}>
+                            Fazer
                           </button>
-                        ) : (
-                          <button onClick={() => reabrir(r.id, r.nome)} style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#f59e0b"; (e.currentTarget as HTMLButtonElement).style.color = "#f59e0b"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-muted)"; }}>
-                            Reabrir
+                          {aba === "Pendente" ? (
+                            <button className="ctl-btn ctl-btn--concluir" onClick={() => concluir(r.id, r.nome)}>✓ Concluir</button>
+                          ) : (
+                            <button className="ctl-btn ctl-btn--reabrir" onClick={() => reabrir(r.id, r.nome)}>Reabrir</button>
+                          )}
+                          <button className="ctl-btn ctl-btn--del" onClick={() => remover(r.id)} title="Remover" aria-label="Remover">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                            </svg>
                           </button>
-                        )}
-                        <button onClick={() => remover(r.id)} title="Remover" style={{ padding: "6px 9px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, cursor: "pointer" }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#f87171"; (e.currentTarget as HTMLButtonElement).style.color = "#f87171"; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--fg-muted)"; }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                          </svg>
-                        </button>
-                      </div>
+                        </div>
                       )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div style={{ padding: "11px 16px", borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--fg-muted)" }}>
+            <div className="ctl-foot">
               {lista.length} registro{lista.length !== 1 ? "s" : ""}
             </div>
           </>
