@@ -1,3 +1,14 @@
+/* ── Bulk select bar ── */
+.pub-bulk-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; margin: 0 0 2px;
+  background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25);
+  border-radius: 10px; animation: pubBulkIn .15s ease;
+}
+@keyframes pubBulkIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.pub-bulk-count { font-size: 13px; font-weight: 600; color: var(--fg); flex: 1; min-width: 0; }
+.pub-row--sel { background: rgba(99,102,241,0.06) !important; }
+
 /* ── Breadcrumb ── */
 .breadcrumb-path {
   display: flex;

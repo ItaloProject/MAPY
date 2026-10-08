@@ -16,7 +16,7 @@ type Usuario = {
   created_at: string;
 };
 
-type ModalTipo = "criar" | "suspender" | "reset" | "apagar" | "credenciais" | null;
+type ModalTipo = "criar" | "suspender" | "reset" | "apagar" | "credenciais" | "qrs" | null;
 
 const PERFIS = ["Administrador", "Operador", "Suporte", "Visualizador"];
 
@@ -120,6 +120,10 @@ export default function Usuarios() {
   const [credSenha,     setCredSenha]     = useState("");
   const [copied,        setCopied]        = useState<"mat"|"pwd"|null>(null);
 
+  // QRs do usuário
+  const [qrsCount,  setQrsCount]  = useState<number | null>(null);
+  const [qrsBusy,   setQrsBusy]   = useState(false);
+
   useEffect(() => { carregar(); }, []);
 
   async function carregar() {
@@ -140,7 +144,24 @@ export default function Usuarios() {
     setModal("criar");
   }
 
-  function fecharModal() { setModal(null); setAlvo(null); setFormErr(null); setSaving(false); }
+  function fecharModal() { setModal(null); setAlvo(null); setFormErr(null); setSaving(false); setQrsCount(null); }
+
+  async function abrirQRs(u: Usuario) {
+    setAlvo(u); setQrsCount(null); setModal("qrs");
+    if (!u.auth_user_id) return;
+    const { count } = await supabase
+      .from("publicacoes").select("*", { count: "exact", head: true }).eq("created_by", u.auth_user_id);
+    setQrsCount(count ?? 0);
+  }
+
+  async function toggleQRsUsuario(ativo: boolean) {
+    if (!alvo?.auth_user_id) return;
+    setQrsBusy(true);
+    await supabase.from("publicacoes").update({ ativo }).eq("created_by", alvo.auth_user_id);
+    setQrsBusy(false);
+    fecharModal();
+    showToast(ativo ? "QRs ativados." : "QRs desativados.");
+  }
 
   async function copiar(texto: string, tipo: "mat"|"pwd") {
     await navigator.clipboard.writeText(texto).catch(() => {});
@@ -378,6 +399,36 @@ export default function Usuarios() {
               </>
             )}
 
+            {/* QRs DO USUÁRIO */}
+            {modal === "qrs" && alvo && (
+              <>
+                <h3 style={h3St}>QR Codes de {alvo.nome.split(" ")[0]}</h3>
+                <p style={{ margin: "0 0 6px", fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
+                  {!alvo.auth_user_id
+                    ? "Este usuário não tem conta vinculada — sem QR codes para gerenciar."
+                    : qrsCount === null
+                      ? "Contando QR codes…"
+                      : qrsCount === 0
+                        ? "Nenhum QR code encontrado para este usuário."
+                        : <><strong style={{ color: "var(--fg)" }}>{qrsCount} QR code{qrsCount !== 1 ? "s" : ""}</strong> publicado{qrsCount !== 1 ? "s" : ""} por este usuário.</>
+                  }
+                </p>
+                {alvo.auth_user_id && qrsCount !== null && qrsCount > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
+                    <button onClick={() => toggleQRsUsuario(false)} disabled={qrsBusy} style={{ ...btnPrimSt, background: "#ef4444", borderColor: "#ef4444" }}>
+                      {qrsBusy ? "Aguarde…" : `Desativar todos (${qrsCount})`}
+                    </button>
+                    <button onClick={() => toggleQRsUsuario(true)} disabled={qrsBusy} style={{ ...btnPrimSt, background: "#10b981", borderColor: "#10b981" }}>
+                      {qrsBusy ? "Aguarde…" : `Ativar todos (${qrsCount})`}
+                    </button>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 22 }}>
+                  <button onClick={fecharModal} style={btnSecSt}>Fechar</button>
+                </div>
+              </>
+            )}
+
             {/* APAGAR */}
             {modal === "apagar" && alvo && (
               <>
@@ -499,6 +550,13 @@ export default function Usuarios() {
                               Chave
                             </ABtn>
                           )}
+                          <ABtn color="#a78bfa" onClick={() => abrirQRs(u)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/>
+                              <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/>
+                            </svg>
+                            <span className="usr-abtn-txt">QRs</span>
+                          </ABtn>
                           <ABtn color="#f87171" onClick={() => { setAlvo(u); setModal("apagar"); }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                             <span className="usr-abtn-txt">Apagar</span>

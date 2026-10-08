@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useOutletContext } from "react-router-dom";
+import type { UsuarioLogado } from "../lib/usuario";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
@@ -345,6 +346,7 @@ type DBRow = {
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
   pagamento_status?: "pendente" | "pago";
   ativo?: boolean;
+  created_by?: string | null;
 };
 
 function rowToCliente(r: DBRow): Cliente {
@@ -641,21 +643,35 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, onEditar, onApagar, onToggleAtivo }: {
+function TabClientes({ clientes, isAdmin, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
   clientes: Cliente[];
+  isAdmin: boolean;
   onEditar: (c: Cliente) => void;
   onApagar: (c: Cliente) => void | Promise<void>;
   onToggleAtivo: (c: Cliente) => void | Promise<void>;
+  onToggleAtivoLote: (pubIds: string[], ativo: boolean) => void | Promise<void>;
 }) {
   const [search, setSearch] = useState("");
   const [qrCliente, setQrCliente] = useState<Cliente | null>(null);
   const [editCliente, setEditCliente] = useState<Cliente | null>(null);
   const [delCliente, setDelCliente] = useState<Cliente | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = clientes.filter(c =>
     c.nome.toLowerCase().includes(search.toLowerCase()) || c.cpf.includes(search)
   );
+
+  function toggleSelect(pubId: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(pubId) ? n.delete(pubId) : n.add(pubId); return n; });
+  }
+
+  const allSelected = filtered.length > 0 && filtered.every(c => selected.has(c.pubId));
+
+  function toggleSelectAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map(c => c.pubId)));
+  }
 
   async function confirmarApagar() {
     if (!delCliente) return;
@@ -703,16 +719,32 @@ function TabClientes({ clientes, onEditar, onApagar, onToggleAtivo }: {
           value={search} onChange={e => setSearch(e.target.value)} />
         <button className="btn-primary pub-add-desktop">+ Adicionar cliente</button>
       </div>
+
+      {isAdmin && selected.size > 0 && (
+        <div className="pub-bulk-bar">
+          <span className="pub-bulk-count">{selected.size} selecionado{selected.size !== 1 ? "s" : ""}</span>
+          <button className="btn-sm" onClick={() => { onToggleAtivoLote([...selected], false); setSelected(new Set()); }}
+            style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.4)" }}>Desativar</button>
+          <button className="btn-sm" onClick={() => { onToggleAtivoLote([...selected], true); setSelected(new Set()); }}
+            style={{ color: "#34d399", borderColor: "rgba(52,211,153,0.4)" }}>Ativar</button>
+          <button className="btn-sm" onClick={() => setSelected(new Set())}>Limpar</button>
+        </div>
+      )}
+
       <div className="pub-table-wrap">
         <table className="data-table pub-table">
           <thead>
-            <tr><th>Nome</th><th>CPF</th><th>Curso</th><th>Status</th><th>Publicado em</th><th></th></tr>
+            <tr>
+              {isAdmin && <th style={{ width: 36, padding: "0 8px" }}><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ cursor: "pointer", accentColor: "var(--accent)" }} /></th>}
+              <th>Nome</th><th>CPF</th><th>Curso</th><th>Status</th><th>Publicado em</th><th></th>
+            </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr className="pub-empty"><td colSpan={6}><div className="empty-state"><p>Nenhum cliente encontrado</p></div></td></tr>
             ) : filtered.map(c => (
-              <tr key={c.id} className="pub-row">
+              <tr key={c.id} className={`pub-row${selected.has(c.pubId) ? " pub-row--sel" : ""}`}>
+                {isAdmin && <td style={{ width: 36, padding: "0 8px" }}><input type="checkbox" checked={selected.has(c.pubId)} onChange={() => toggleSelect(c.pubId)} style={{ cursor: "pointer", accentColor: "var(--accent)" }} /></td>}
                 <td className="pc-title">{c.nome}</td>
                 <td className="pc-line pc-cpf" data-label="CPF">{c.cpf}</td>
                 <td className="pc-line pc-curso" data-label="Curso">{c.curso}</td>
@@ -749,27 +781,23 @@ function TabClientes({ clientes, onEditar, onApagar, onToggleAtivo }: {
                         <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
                       </svg>
                     </button>
-                    <button
-                      className="btn-sm btn-icon"
-                      title={c.ativo ? "QR ativo — clique para desativar" : "QR desativado — clique para ativar"}
-                      aria-label={c.ativo ? "Desativar QR" : "Ativar QR"}
-                      onClick={() => onToggleAtivo(c)}
-                      style={{
-                        color: c.ativo ? "#34d399" : "#6b7280",
-                        borderColor: c.ativo ? "rgba(52,211,153,0.4)" : "rgba(107,114,128,0.4)",
-                        background: c.ativo ? "rgba(52,211,153,0.08)" : "rgba(107,114,128,0.08)",
-                      }}
-                    >
-                      {c.ativo ? (
+                    {isAdmin && (
+                      <button
+                        className="btn-sm btn-icon"
+                        title={c.ativo ? "QR ativo — clique para desativar" : "QR desativado — clique para ativar"}
+                        aria-label={c.ativo ? "Desativar QR" : "Ativar QR"}
+                        onClick={() => onToggleAtivo(c)}
+                        style={{
+                          color: c.ativo ? "#34d399" : "#6b7280",
+                          borderColor: c.ativo ? "rgba(52,211,153,0.4)" : "rgba(107,114,128,0.4)",
+                          background: c.ativo ? "rgba(52,211,153,0.08)" : "rgba(107,114,128,0.08)",
+                        }}
+                      >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18.36 6.64A9 9 0 1 1 5.64 5.64"/><line x1="12" y1="2" x2="12" y2="12"/>
                         </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18.36 6.64A9 9 0 1 1 5.64 5.64"/><line x1="12" y1="2" x2="12" y2="12"/>
-                        </svg>
-                      )}
-                    </button>
+                      </button>
+                    )}
                     <button
                       className="btn-sm btn-icon"
                       title="Apagar publicação"
@@ -1096,6 +1124,8 @@ function PrevRow({ label, value }: { label: string; value: string }) {
 export default function Publicacao() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
+  const isAdmin = usuario?.perfil === "Administrador";
   const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
   const [activeTab, setActiveTab] = useState<Tab>(prefill || new URLSearchParams(location.search).get("aba") === "novo" ? "novo" : "clientes");
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -1115,7 +1145,8 @@ export default function Publicacao() {
   }, []);
 
   async function adicionarCliente(c: Cliente) {
-    const row = clienteToRow(c);
+    const { data: { user } } = await supabase.auth.getUser();
+    const row = { ...clienteToRow(c), created_by: user?.id ?? null };
     const { data } = await supabase
       .from("publicacoes")
       .insert([row])
@@ -1155,6 +1186,11 @@ export default function Publicacao() {
     if (!error) setClientes(prev => prev.map(x => x.pubId === c.pubId ? { ...x, ativo: novoAtivo } : x));
   }
 
+  async function toggleAtivoLote(pubIds: string[], ativo: boolean) {
+    await supabase.from("publicacoes").update({ ativo }).in("pub_id", pubIds);
+    setClientes(prev => prev.map(c => pubIds.includes(c.pubId) ? { ...c, ativo } : c));
+  }
+
   return (
     <>
       <div className="page-header pub-page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -1191,7 +1227,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
               {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} prefill={prefill} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
