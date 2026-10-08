@@ -12,7 +12,7 @@ interface PubData {
 
 const STYLES = `
   * { box-sizing: border-box; }
-  .pub-wrap    { width: min(100%, 500px); min-height: 100vh; margin: auto; }
+  .pub-wrap    { width: 100%; max-width: 500px; min-height: 100vh; margin: 0 auto; display: block; }
   .pub-header  { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
   .pub-logo    { height: 32px; width: auto; max-width: 110px; object-fit: contain; object-position: left center; }
   .pub-a11y    { display: flex; gap: 14px; align-items: center; }
@@ -129,7 +129,7 @@ export default function PubViewer() {
   );
 
   return (
-    <div style={{ margin: 0, padding: 0, background: pageBg, fontFamily: "Arial, sans-serif", color: fg, minHeight: "100vh" }}>
+    <div style={{ margin: 0, padding: 0, width: "100%", background: pageBg, fontFamily: "Arial, sans-serif", color: fg, minHeight: "100vh" }}>
       <style>{STYLES}</style>
 
       <div className="pub-wrap" style={{ background: innerBg }}>
