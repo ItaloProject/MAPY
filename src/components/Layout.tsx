@@ -42,6 +42,8 @@ const navBase = [
   },
 ];
 
+const BOTTOM_ROTAS = ["/dashboard", "/clientes", "/qrcodes", "/pendentes"];
+
 export default function Layout({ onLogout, usuario }: { onLogout?: () => void; usuario?: UsuarioLogado | null }) {
   const perfil = usuario?.perfil ?? null;
   const nomeUsuario = usuario?.nome ?? "";
@@ -53,6 +55,7 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
   const location  = useLocation();
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 768px)").matches);
   const mini = collapsed && !isMobile;
+  const maisAtivo = mobileOpen || ["/usuarios", "/configuracoes"].some(r => location.pathname.startsWith(r));
   const titulo = TITULOS[location.pathname.replace(/\/+$/, "")] ?? "Painel de controle";
 
   useEffect(() => {
@@ -172,14 +175,6 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
       <div className="main-wrap">
         <header className="topbar">
           <div className="topbar-left">
-            {/* Hamburguer — visível apenas no mobile */}
-            <button className="topbar-hamburger" onClick={() => setMobileOpen(v => !v)} aria-label="Abrir menu">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="3" y1="6"  x2="21" y2="6"/>
-                <line x1="3" y1="12" x2="21" y2="12"/>
-                <line x1="3" y1="18" x2="21" y2="18"/>
-              </svg>
-            </button>
             <div className="breadcrumb" id="page-title">{titulo}</div>
           </div>
           <div className="topbar-right">
@@ -189,7 +184,7 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
               </svg>
               {pendentes > 0 && <span className="topbar-badge">{pendentes}</span>}
             </button>
-            <button className="topbar-btn" title="Perfil">
+            <button className="topbar-btn" title="Perfil" onClick={() => { if (isMobile) setMobileOpen(true); }}>
               <div className="topbar-avatar">{siglas}</div>
             </button>
           </div>
@@ -197,6 +192,31 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
         <main className="main-content">
           <Outlet context={{ usuario }} />
         </main>
+
+        {isMobile && (
+          <nav className="bottom-nav" aria-label="Navegação principal">
+            {navBase.filter(i => BOTTOM_ROTAS.includes(i.to)).map(item => {
+              const badge = item.pendente ? pendentes : 0;
+              return (
+                <NavLink key={item.to} to={item.to} className={({ isActive }) => `bn-item${isActive ? " is-active" : ""}`}>
+                  <span className="bn-icon">
+                    {item.icon}
+                    {badge > 0 && <span className="bn-badge">{badge > 99 ? "99+" : badge}</span>}
+                  </span>
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
+            <button type="button" className={`bn-item${maisAtivo ? " is-active" : ""}`} onClick={() => setMobileOpen(true)} aria-label="Mais opções">
+              <span className="bn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>
+                </svg>
+              </span>
+              <span>Mais</span>
+            </button>
+          </nav>
+        )}
       </div>
     </div>
   );

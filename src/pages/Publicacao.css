@@ -229,7 +229,7 @@
   /* Botão flutuante */
   .pub-fab {
     display: flex; align-items: center; justify-content: center; position: fixed; z-index: 50;
-    right: 18px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
+    right: 18px; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
     border: 0; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 8px 24px rgba(14, 165, 233, .45);
     -webkit-tap-highlight-color: transparent; transition: transform .12s;
   }
