@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { useIsAdmin } from "../lib/auth";
 import "../components/Layout.css";
 
 type StatusPag = "pendente" | "pago";
@@ -19,7 +20,7 @@ interface Pub {
   created_at: string;
 }
 
-type ModalTipo = "marcarPago" | "agendar" | "editarValor" | "reverter" | null;
+type ModalTipo = "marcarPago" | "agendar" | "editarValor" | "reverter" | "apagar" | null;
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -40,6 +41,7 @@ function isAtrasado(agendamento: string | null) {
 }
 
 export default function Pendentes() {
+  const isAdmin = useIsAdmin();
   const [pubs,     setPubs]     = useState<Pub[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [aba,      setAba]      = useState<"pendente" | "pago">("pendente");
@@ -141,6 +143,22 @@ export default function Pendentes() {
     if (data) setPubs(prev => prev.map(p => p.id === alvo.id ? data as Pub : p));
     fecharModal();
     showToast(dataAgendamento ? `Pagamento agendado para ${fmtDateOnly(dataAgendamento)}.` : "Agendamento removido.");
+  }
+
+  // ── Apagar publicação ──────────────────────────────────────────────────────
+  async function apagarPub() {
+    if (!alvo) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("publicacoes")
+      .delete()
+      .eq("id", alvo.id);
+    setSaving(false);
+    if (error) { showToast("Erro ao apagar registro."); return; }
+    const nome = alvo.nome;
+    setPubs(prev => prev.filter(p => p.id !== alvo.id));
+    fecharModal();
+    showToast(`Registro de ${nome} apagado.`);
   }
 
   // ── Derivados ─────────────────────────────────────────────────────────────
@@ -256,6 +274,22 @@ export default function Pendentes() {
                 </div>
               </>
             )}
+
+            {/* APAGAR */}
+            {modal === "apagar" && alvo && (
+              <>
+                <h3 style={{ margin: "0 0 12px", fontSize: 17, fontWeight: 700, color: "#f87171" }}>Apagar registro</h3>
+                <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
+                  Esta ação é <strong>irreversível</strong>. A publicação de{" "}
+                  <strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> será removida por completo,
+                  incluindo o controle de pagamento, e o QR Code dela deixará de funcionar.
+                </p>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
+                  <button onClick={apagarPub} disabled={saving} style={{ ...btnPrimStyle, background: "#ef4444" }}>{saving ? "Apagando…" : "Apagar"}</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -332,60 +366,92 @@ export default function Pendentes() {
                       <td style={{ padding: "13px 16px", fontFamily: "monospace", fontSize: 12, color: "var(--accent)", whiteSpace: "nowrap" }}>{p.protocolo || "—"}</td>
                       <td style={{ padding: "13px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{p.data || "—"}</td>
 
-                      {/* Valor — clicável para editar */}
+                      {/* Valor — clicável para editar (somente admin) */}
                       <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
-                        <button
-                          onClick={() => abrirModal("editarValor", p)}
-                          title="Editar valor"
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "var(--fg)", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
-                        >
-                          R$ {fmt(p.valor ?? 100)}
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
+                        {isAdmin ? (
+                          <button
+                            onClick={() => abrirModal("editarValor", p)}
+                            title="Editar valor"
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "var(--fg)", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
+                          >
+                            R$ {fmt(p.valor ?? 100)}
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "var(--fg)" }}>R$ {fmt(p.valor ?? 100)}</span>
+                        )}
                       </td>
 
                       {/* Agendado / Pago em */}
                       <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
                         {aba === "pendente" ? (
                           p.agendamento_data ? (
-                            <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: atrasado ? "#f87171" : "#34d399", padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
-                              {atrasado && <span title="Atrasado">⚠</span>}
-                              {fmtDateOnly(p.agendamento_data)}
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
+                            isAdmin ? (
+                              <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: atrasado ? "#f87171" : "#34d399", padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                                {atrasado && <span title="Atrasado">⚠</span>}
+                                {fmtDateOnly(p.agendamento_data)}
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: 13, fontWeight: 600, color: atrasado ? "#f87171" : "#34d399", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                {atrasado && <span title="Atrasado">⚠</span>}
+                                {fmtDateOnly(p.agendamento_data)}
+                              </span>
+                            )
                           ) : (
-                            <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "var(--fg-muted)", padding: "3px 10px" }}>
-                              + Agendar
-                            </button>
+                            isAdmin ? (
+                              <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "var(--fg-muted)", padding: "3px 10px" }}>
+                                + Agendar
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>—</span>
+                            )
                           )
                         ) : (
                           <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{fmtDate(p.pagamento_data)}</span>
                         )}
                       </td>
 
-                      {/* Ações */}
+                      {/* Ações (somente admin) */}
                       <td style={{ padding: "13px 16px" }}>
-                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                          {aba === "pendente" ? (
+                        {isAdmin ? (
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                            {aba === "pendente" ? (
+                              <button
+                                onClick={() => abrirModal("marcarPago", p)}
+                                style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                              >
+                                ✓ Marcar pago
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => abrirModal("reverter", p)}
+                                style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                                onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = "#f59e0b"; b.style.color = "#f59e0b"; }}
+                                onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; b.style.color = "var(--fg-muted)"; }}
+                              >
+                                Reverter
+                              </button>
+                            )}
                             <button
-                              onClick={() => abrirModal("marcarPago", p)}
-                              style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                              onClick={() => abrirModal("apagar", p)}
+                              title="Apagar registro"
+                              style={{ padding: "6px 9px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "#f87171", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}
+                              onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = "#f87171"; }}
+                              onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; }}
                             >
-                              ✓ Marcar pago
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                              </svg>
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => abrirModal("reverter", p)}
-                              style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-                              onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = "#f59e0b"; b.style.color = "#f59e0b"; }}
-                              onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; b.style.color = "var(--fg-muted)"; }}
-                            >
-                              Reverter
-                            </button>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: "right", fontSize: 12, color: "var(--fg-muted)" }}>
+                            {aba === "pendente" ? "Pendente" : "Pago"}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

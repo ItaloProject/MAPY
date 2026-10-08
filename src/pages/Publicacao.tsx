@@ -333,6 +333,7 @@ interface Cliente {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
   protocolo: string; url: string;
+  pagamentoStatus: "pendente" | "pago";
 }
 
 type DBRow = {
@@ -340,6 +341,7 @@ type DBRow = {
   nascimento: string; rg: string; nome_mae: string; nome_pai: string; observacao: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
+  pagamento_status?: "pendente" | "pago";
 };
 
 function rowToCliente(r: DBRow): Cliente {
@@ -350,6 +352,7 @@ function rowToCliente(r: DBRow): Cliente {
     instituicao: r.instituicao, inep: r.inep, endereco: r.endereco, bairro: r.bairro,
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
+    pagamentoStatus: r.pagamento_status === "pago" ? "pago" : "pendente",
   };
 }
 
@@ -376,14 +379,14 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "visualizar", label: "VISUALIZAR" },
 ];
 
-/* ── Estilo padrão de TODOS os QR codes: versão 8 (49 módulos), sem borda, preto sobre branco ── */
+/* ── Estilo padrão de TODOS os QR codes: alta qualidade de leitura.
+   A borda branca (quiet zone) é EXIGIDA pela norma do QR — sem ela o leitor não acha o código.
+   level "Q" = 25% de correção de erro (lê mesmo com reflexo/desgaste). ── */
 const QR_STYLE = {
   fgColor: "#000000",
   bgColor: "#ffffff",
-  level: "L",
-  minVersion: 8,
-  boostLevel: false,
-  marginSize: 0,
+  level: "Q",
+  marginSize: 4,
 } as const;
 
 /* ── QR Display: sempre SVG fresco (sem cache localStorage) ── */
@@ -620,14 +623,24 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, onEditar }: { clientes: Cliente[]; onEditar: (c: Cliente) => void }) {
+function TabClientes({ clientes, onEditar, onApagar }: { clientes: Cliente[]; onEditar: (c: Cliente) => void; onApagar: (c: Cliente) => void | Promise<void> }) {
   const [search, setSearch] = useState("");
   const [qrCliente, setQrCliente] = useState<Cliente | null>(null);
   const [editCliente, setEditCliente] = useState<Cliente | null>(null);
+  const [delCliente, setDelCliente] = useState<Cliente | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = clientes.filter(c =>
     c.nome.toLowerCase().includes(search.toLowerCase()) || c.cpf.includes(search)
   );
+
+  async function confirmarApagar() {
+    if (!delCliente) return;
+    setDeleting(true);
+    await onApagar(delCliente);
+    setDeleting(false);
+    setDelCliente(null);
+  }
 
   return (
     <div className="tab-body">
@@ -638,6 +651,29 @@ function TabClientes({ clientes, onEditar }: { clientes: Cliente[]; onEditar: (c
           onSave={onEditar}
           onClose={() => setEditCliente(null)}
         />
+      )}
+      {delCliente && (
+        <div className="modal-backdrop" onClick={() => !deleting && setDelCliente(null)}>
+          <div className="modal-box modal-box--sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title" style={{ color: "#f87171" }}>Apagar publicação</div>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6, margin: 0 }}>
+                Esta ação é <strong>irreversível</strong>. A publicação de{" "}
+                <strong style={{ color: "var(--fg)" }}>{delCliente.nome}</strong> será removida
+                permanentemente, e o QR Code dela deixará de funcionar.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-sm" disabled={deleting} onClick={() => setDelCliente(null)}>Cancelar</button>
+              <button className="btn-sm" disabled={deleting} onClick={confirmarApagar}
+                style={{ background: "#ef4444", borderColor: "#ef4444", color: "#fff" }}>
+                {deleting ? "Apagando…" : "Apagar"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       <div className="tab-toolbar">
         <input className="search-input" placeholder="Buscar por nome ou CPF…"
@@ -668,10 +704,29 @@ function TabClientes({ clientes, onEditar }: { clientes: Cliente[]; onEditar: (c
                     style={{ opacity: c.status === "Publicado" ? 1 : 0.4, cursor: c.status === "Publicado" ? "pointer" : "default" }}
                   >Ver</button>
                   <button className="btn-sm" onClick={() => setEditCliente(c)}>Editar</button>
-                  <button className="btn-sm btn-icon" title="QR Code" onClick={() => setQrCliente(c)}>
+                  <button
+                    className="btn-sm btn-icon"
+                    title={c.pagamentoStatus === "pendente" ? "QR Code — pagamento pendente" : "QR Code — pagamento em dia"}
+                    onClick={() => setQrCliente(c)}
+                    style={{
+                      color: c.pagamentoStatus === "pendente" ? "#f87171" : "#34d399",
+                      borderColor: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.5)" : "rgba(52,211,153,0.5)",
+                      background: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.08)" : "rgba(52,211,153,0.08)",
+                    }}
+                  >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/>
                       <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
+                    </svg>
+                  </button>
+                  <button
+                    className="btn-sm btn-icon"
+                    title="Apagar publicação"
+                    onClick={() => setDelCliente(c)}
+                    style={{ color: "#f87171" }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
                     </svg>
                   </button>
                 </td>
@@ -759,6 +814,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
       modalidade: form.modalidade,
       anoConclusao: form.anoConclusao,
       protocolo, url,
+      pagamentoStatus: "pendente",
     };
 
     onGerar(novo);
@@ -1025,6 +1081,14 @@ export default function Publicacao() {
     if (data) setClientes(prev => prev.map(c => c.pubId === atualizado.pubId ? rowToCliente(data as DBRow) : c));
   }
 
+  async function apagarCliente(c: Cliente) {
+    const { error } = await supabase
+      .from("publicacoes")
+      .delete()
+      .eq("pub_id", c.pubId);
+    if (!error) setClientes(prev => prev.filter(x => x.pubId !== c.pubId));
+  }
+
   return (
     <>
       <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -1061,7 +1125,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} onApagar={apagarCliente} />}
               {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} prefill={prefill} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
@@ -1075,7 +1139,7 @@ export default function Publicacao() {
         .search-input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13px;color:var(--fg);outline:none;min-width:240px;font-family:var(--font)}
         .search-input:focus{border-color:var(--border-focus)}
         .btn-icon{padding:5px 8px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg-muted)}
-        .btn-icon:hover{color:var(--accent)}
+        .btn-icon:hover{filter:brightness(1.15)}
         .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
         .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.4)}
         .modal-box--sm{max-width:360px}

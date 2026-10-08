@@ -12,18 +12,33 @@ import Usuarios from "./pages/Usuarios";
 import Configuracoes from "./pages/Configuracoes";
 import PubViewer from "./pages/PubViewer";
 
+type Perfil = "Administrador" | "Operador" | "Suporte" | "Visualizador" | null;
+
 export default function App() {
   const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [perfil, setPerfil] = useState<Perfil>(null);
+
+  async function carregarPerfil(userId: string) {
+    const { data } = await supabase
+      .from("usuarios")
+      .select("perfil")
+      .eq("auth_user_id", userId)
+      .single();
+    setPerfil((data?.perfil as Perfil) ?? null);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setAuthed(!!data.session);
+      if (data.session?.user) carregarPerfil(data.session.user.id);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthed(!!session);
+      if (session?.user) carregarPerfil(session.user.id);
+      else setPerfil(null);
     });
 
     return () => subscription.unsubscribe();
@@ -32,6 +47,7 @@ export default function App() {
   async function logout() {
     await supabase.auth.signOut();
     setAuthed(false);
+    setPerfil(null);
   }
 
   if (loading) return null;
@@ -45,7 +61,7 @@ export default function App() {
         />
         <Route
           path="/"
-          element={authed ? <Layout onLogout={logout} /> : <Navigate to="/4c7913fce5eb" replace />}
+          element={authed ? <Layout onLogout={logout} perfil={perfil} /> : <Navigate to="/4c7913fce5eb" replace />}
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
@@ -53,7 +69,7 @@ export default function App() {
           <Route path="qrcodes" element={<QRCodes />} />
           <Route path="qrcodes/publicacao" element={<Publicacao />} />
           <Route path="pendentes" element={<Pendentes />} />
-          <Route path="usuarios" element={<Usuarios />} />
+          <Route path="usuarios" element={perfil === "Administrador" ? <Usuarios /> : <Navigate to="/dashboard" replace />} />
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
         <Route path="/pub/:id" element={<PubViewer />} />

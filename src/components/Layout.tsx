@@ -31,7 +31,7 @@ const navBase = [
   },
 ];
 
-export default function Layout({ onLogout }: { onLogout?: () => void }) {
+export default function Layout({ onLogout, perfil }: { onLogout?: () => void; perfil?: string | null }) {
   const [collapsed,  setCollapsed]  = useState(false);
   const [pendentes,  setPendentes]  = useState(0);
   const navigate = useNavigate();
@@ -71,7 +71,7 @@ export default function Layout({ onLogout }: { onLogout?: () => void }) {
         </div>
 
         <nav className="sidebar-nav">
-          {navBase.map(item => {
+          {navBase.filter(item => item.to !== "/usuarios" || perfil === "Administrador").map(item => {
             const badge = item.pendente ? pendentes : 0;
             return (
               <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}>
