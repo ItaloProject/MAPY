@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import "../components/Layout.css";
 import { supabase } from "../lib/supabase";
+import { sincronizarPublicacoes } from "../lib/controle";
+import type { UsuarioLogado } from "../lib/usuario";
 
 function fmtData(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -63,16 +65,14 @@ export default function Dashboard() {
   const [concluidos, setConcluidos] = useState<number | null>(null);
   const [usuarios,   setUsuarios]   = useState<number | null>(null);
   const [recentes,   setRecentes]   = useState<Recente[]>([]);
-  const [nomeAdmin,  setNomeAdmin]  = useState("Admin");
+  const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
+  const nomeAdmin = usuario?.nome ? usuario.nome.split(" ")[0] : "";
+  const isAdmin = usuario?.perfil === "Administrador";
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.user_metadata?.nome) setNomeAdmin(user.user_metadata.nome.split(" ")[0]);
-      else if (user?.email) setNomeAdmin(user.email.split("@")[0]);
-    });
-
-    async function load() {
-      setLoading(true);
+    async function load(silent = false) {
+      if (!silent) setLoading(true);
+      try { await sincronizarPublicacoes(); } catch { /* contagens seguem com o que existe */ }
       const [
         { count: tCli },
         { count: tQR },
@@ -97,6 +97,9 @@ export default function Dashboard() {
       setLoading(false);
     }
     load();
+    const aoVoltar = () => { if (!document.hidden) load(true); };
+    document.addEventListener("visibilitychange", aoVoltar);
+    return () => document.removeEventListener("visibilitychange", aoVoltar);
   }, []);
 
   const vals: Record<string, number | null> = { clientes, qrcodes, pendentes, usuarios };
@@ -109,7 +112,7 @@ export default function Dashboard() {
         @keyframes sk { 0%,100%{opacity:.4} 50%{opacity:.9} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         .db-wrap { display:flex; flex-direction:column; gap:16px; animation:fadeUp .3s ease both; }
-        .db-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+        .db-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
         .db-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:border-color .15s,transform .15s; }
         .db-card:hover { border-color:var(--accent); transform:translateY(-1px); }
         .db-body { display:grid; grid-template-columns:1fr 260px; gap:12px; }
@@ -122,18 +125,42 @@ export default function Dashboard() {
         .qbtn { display:flex; align-items:center; gap:8px; padding:9px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; cursor:pointer; transition:all .15s; color:var(--fg-muted); font-size:12px; font-weight:600; width:100%; }
         .qbtn:hover { border-color:var(--accent); color:var(--accent); background:rgba(14,165,233,0.05); }
         @media(max-width:860px){ .db-cards{grid-template-columns:repeat(2,1fr)} .db-body{grid-template-columns:1fr} }
-        @media(max-width:480px){ .db-cards{grid-template-columns:1fr 1fr} }
+        @media(max-width:768px){
+          .db-wrap{gap:14px}
+          .db-hello{align-items:flex-start!important}
+          .db-hello h1{font-size:22px!important}
+          .db-hello-btns{width:100%}
+          .db-hello-btns button{flex:1;min-height:46px;font-size:14px!important;border-radius:10px}
+          .db-cards{gap:10px}
+          .db-card{flex-direction:column;align-items:flex-start;gap:10px;padding:14px;min-height:96px}
+          .db-card:hover{transform:none;border-color:var(--border)}
+          .db-card:active{transform:scale(.98);border-color:var(--accent)}
+          .db-card:last-child:nth-child(odd){grid-column:1/-1}
+          .db-card .db-num{font-size:26px!important}
+          .db-card .db-lbl{font-size:12px!important}
+          .db-body{display:flex!important;flex-direction:column;gap:14px}
+          .db-side{display:contents!important}
+          .db-status{order:1}.db-quick{order:2}.db-recent{order:3}
+          .db-panel-hd{padding:14px 16px}
+          .db-panel-hd-title{font-size:14px}
+          .act-row{padding:12px 16px;min-height:60px}
+          .act-row:hover{background:transparent}
+          .act-row:active{background:var(--surface-2)}
+          .db-qgrid{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+          .db-qgrid .qbtn{min-height:56px;font-size:13px;flex-direction:column;justify-content:center;gap:6px;text-align:center}
+          .db-qgrid .qbtn:last-child:nth-child(odd){grid-column:1/-1}
+        }
       `}</style>
 
       <div className="db-wrap">
 
         {/* ── Saudação compacta ── */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+        <div className="db-hello" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
           <div>
-            <span style={{ fontSize:13, color:"var(--accent)", fontWeight:600 }}>{saudacao()}, {nomeAdmin}</span>
+            <span style={{ fontSize:13, color:"var(--accent)", fontWeight:600 }}>{saudacao()}{nomeAdmin ? `, ${nomeAdmin}` : ""}</span>
             <h1 style={{ fontSize:20, fontWeight:800, color:"var(--fg)", margin:"2px 0 0", letterSpacing:"-.02em" }}>Painel e-MEC</h1>
           </div>
-          <div style={{ display:"flex", gap:8 }}>
+          <div className="db-hello-btns" style={{ display:"flex", gap:8 }}>
             <button className="btn-sm" style={{ fontSize:12 }} onClick={() => navigate("/clientes")}>+ Cliente</button>
             <button className="btn-primary" style={{ fontSize:12 }} onClick={() => navigate("/qrcodes/publicacao")}>+ Publicação</button>
           </div>
@@ -141,7 +168,7 @@ export default function Dashboard() {
 
         {/* ── 4 cards ── */}
         <div className="db-cards">
-          {CARDS.map(card => (
+          {CARDS.filter(c => c.key !== "usuarios" || isAdmin).map(card => (
             <div key={card.key} className="db-card" onClick={() => navigate(card.route)}>
               <div style={{ width:32, height:32, borderRadius:8, background:card.bg, display:"flex", alignItems:"center", justifyContent:"center", color:card.color, flexShrink:0 }}>
                 {card.icon}
@@ -149,9 +176,9 @@ export default function Dashboard() {
               <div style={{ minWidth:0 }}>
                 {loading
                   ? <Sk w={36} h={20} />
-                  : <div style={{ fontSize:22, fontWeight:800, color:card.color, letterSpacing:"-.03em", lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{fmtNum(vals[card.key] ?? null)}</div>
+                  : <div className="db-num" style={{ fontSize:22, fontWeight:800, color:card.color, letterSpacing:"-.03em", lineHeight:1, fontVariantNumeric:"tabular-nums" }}>{fmtNum(vals[card.key] ?? null)}</div>
                 }
-                <div style={{ fontSize:11, color:"var(--fg-muted)", fontWeight:600, marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.label}</div>
+                <div className="db-lbl" style={{ fontSize:11, color:"var(--fg-muted)", fontWeight:600, marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{card.label}</div>
               </div>
             </div>
           ))}
@@ -161,7 +188,7 @@ export default function Dashboard() {
         <div className="db-body">
 
           {/* Atividade Recente */}
-          <div className="db-panel">
+          <div className="db-panel db-recent">
             <div className="db-panel-hd">
               <span className="db-panel-hd-title">Atividade Recente</span>
               <button className="btn-sm" style={{ fontSize:11, padding:"4px 10px" }} onClick={() => navigate("/clientes")}>Ver todos</button>
@@ -203,10 +230,10 @@ export default function Dashboard() {
           </div>
 
           {/* Coluna direita */}
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div className="db-side" style={{ display:"flex", flexDirection:"column", gap:12 }}>
 
             {/* Distribuição */}
-            <div className="db-panel" style={{ padding:"14px 16px" }}>
+            <div className="db-panel db-status" style={{ padding:"14px 16px" }}>
               <div style={{ fontSize:13, fontWeight:700, color:"var(--fg)", marginBottom:12 }}>Status dos Clientes</div>
               {loading ? (
                 <div style={{ display:"flex", justifyContent:"center" }}><Sk w={72} h={72} r={50} /></div>
@@ -244,15 +271,15 @@ export default function Dashboard() {
             </div>
 
             {/* Ações rápidas */}
-            <div className="db-panel" style={{ padding:"14px 16px" }}>
+            <div className="db-panel db-quick" style={{ padding:"14px 16px" }}>
               <div style={{ fontSize:13, fontWeight:700, color:"var(--fg)", marginBottom:10 }}>Ações Rápidas</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <div className="db-qgrid" style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {[
                   { label:"Novo Cliente",     route:"/clientes",           color:"#818cf8", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> },
                   { label:"Nova Publicação",  route:"/qrcodes/publicacao", color:"#34d399", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg> },
                   { label:"Ver Pendentes",    route:"/pendentes",          color:"#fbbf24", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
                   { label:"Gerenciar Usuários",route:"/usuarios",          color:"#0ea5e9", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-                ].map(a => (
+                ].filter(a => a.route !== "/usuarios" || isAdmin).map(a => (
                   <button key={a.route} className="qbtn" onClick={() => navigate(a.route)}>
                     <span style={{ color:a.color }}>{a.icon}</span>
                     {a.label}
