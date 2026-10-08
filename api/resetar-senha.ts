@@ -1,11 +1,12 @@
+import { exigirAdmin } from "./_admin";
+
 export const config = { runtime: "edge" };
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
 
-  const authHeader = req.headers.get("authorization") ?? "";
-  const token = authHeader.replace("Bearer ", "").trim();
-  if (!token) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  const negado = await exigirAdmin(req);
+  if (negado) return negado;
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
