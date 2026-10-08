@@ -173,7 +173,7 @@
 
 /* ══════════ Tabelas / cartões (base desktop) ══════════ */
 .pub-table-wrap { overflow-x: auto; }
-.pc-title { font-weight: 600; font-size: 14px; }
+.pc-title { font-weight: 500; font-size: 13px; }
 .pc-cpf, .pc-proto { font-family: monospace; font-size: 13px; white-space: nowrap; }
 .pc-cpf { color: var(--fg-muted); }
 .pc-proto { color: var(--accent); }
@@ -219,7 +219,7 @@
   .pub-table tbody tr:hover td { background: none; }
   .pub-table td.pc-title {
     grid-column: 1; grid-row: 1; align-self: center; padding: 0 12px 12px 0; border-bottom: 1px solid var(--border);
-    font-size: 15px; font-weight: 700; overflow-wrap: anywhere;
+    font-size: 14px; font-weight: 600; overflow-wrap: anywhere;
   }
   .pub-table td.pc-badge { grid-column: 2; grid-row: 1; align-self: stretch; display: flex; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
   .pub-table td.pc-line {
