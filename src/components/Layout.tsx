@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import "./Layout.css";
 import { supabase } from "../lib/supabase";
 
@@ -32,9 +32,21 @@ const navBase = [
 ];
 
 export default function Layout({ onLogout, perfil }: { onLogout?: () => void; perfil?: string | null }) {
-  const [collapsed,  setCollapsed]  = useState(false);
-  const [pendentes,  setPendentes]  = useState(0);
-  const navigate = useNavigate();
+  const [collapsed,   setCollapsed]   = useState(false);
+  const [mobileOpen,  setMobileOpen]  = useState(false);
+  const [pendentes,   setPendentes]   = useState(0);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  // Fecha drawer ao trocar de rota
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Fecha drawer ao expandir para desktop
+  useEffect(() => {
+    const handler = () => { if (window.innerWidth > 768) setMobileOpen(false); };
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     async function buscarPendentes() {
@@ -45,14 +57,18 @@ export default function Layout({ onLogout, perfil }: { onLogout?: () => void; pe
       setPendentes(count ?? 0);
     }
     buscarPendentes();
-
-    // Atualiza a cada 60s sem precisar recarregar a página
     const interval = setInterval(buscarPendentes, 60_000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className={`layout ${collapsed ? "layout--collapsed" : ""}`}>
+    <div className={`layout ${collapsed ? "layout--collapsed" : ""} ${mobileOpen ? "layout--mobile-open" : ""}`}>
+
+      {/* Overlay backdrop (mobile) */}
+      {mobileOpen && (
+        <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />
+      )}
+
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-brand">
@@ -107,6 +123,14 @@ export default function Layout({ onLogout, perfil }: { onLogout?: () => void; pe
       <div className="main-wrap">
         <header className="topbar">
           <div className="topbar-left">
+            {/* Hamburguer — visível apenas no mobile */}
+            <button className="topbar-hamburger" onClick={() => setMobileOpen(v => !v)} aria-label="Abrir menu">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6"  x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
             <div className="breadcrumb" id="page-title">Painel de controle</div>
           </div>
           <div className="topbar-right">
