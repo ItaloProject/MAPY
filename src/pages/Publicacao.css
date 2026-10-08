@@ -173,11 +173,13 @@
 
 /* ══════════ Tabelas / cartões (base desktop) ══════════ */
 .pub-table-wrap { overflow-x: auto; }
-.pc-title { font-weight: 600; }
-.pc-cpf, .pc-proto { font-family: monospace; font-size: 13px; }
+.pc-title { font-weight: 600; font-size: 14px; }
+.pc-cpf, .pc-proto { font-family: monospace; font-size: 13px; white-space: nowrap; }
 .pc-cpf { color: var(--fg-muted); }
 .pc-proto { color: var(--accent); }
 .pc-curso { color: var(--fg-muted); font-size: 13px; }
+.pc-data { font-size: 13px; white-space: nowrap; }
+.pc-pag .chip { font-size: 11px; white-space: nowrap; }
 .pc-data { color: var(--fg-muted); white-space: nowrap; }
 .pc-pag { display: none; }
 .pub-actions { display: flex; gap: 6px; align-items: center; justify-content: center; }
