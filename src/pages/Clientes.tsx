@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../components/Layout.css";
 import { supabase } from "../lib/supabase";
+import { sincronizarPublicacoes } from "../lib/controle";
 
 type ControleStatus = "Pendente" | "Concluído";
 
@@ -52,12 +53,14 @@ export default function Controle() {
   const [toast,     setToast]     = useState<string | null>(null);
   const [search,    setSearch]    = useState("");
   const [ordem,     setOrdem]     = useState<"desc" | "asc">("desc");
+  const [publicados, setPublicados] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => { carregar(); }, [ordem]);
 
   async function carregar() {
     setLoading(true);
+    try { setPublicados(await sincronizarPublicacoes()); } catch {}
     const { data } = await supabase
       .from("clientes")
       .select("id,nome,cpf,controle_status,created_at")
@@ -304,8 +307,8 @@ export default function Controle() {
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
 
-                    <td style={{ padding: "14px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
                         <div style={{ width: 36, height: 36, borderRadius: "50%", background: avatarColor(r.nome), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                           {iniciais(r.nome)}
                         </div>
@@ -313,15 +316,15 @@ export default function Controle() {
                       </div>
                     </td>
 
-                    <td style={{ padding: "14px 16px", fontFamily: "monospace", fontSize: 13, color: "var(--fg-muted)" }}>
+                    <td style={{ padding: "14px 16px", textAlign: "center", fontFamily: "monospace", fontSize: 13, color: "var(--fg-muted)" }}>
                       {r.cpf ? fmtCPF(r.cpf) : <span style={{ opacity: 0.4 }}>—</span>}
                     </td>
 
-                    <td style={{ padding: "14px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "14px 16px", textAlign: "center", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
                       {fmtData(r.created_at)}
                     </td>
 
-                    <td style={{ padding: "14px 16px" }}>
+                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
                       <span style={{
                         fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
                         background: aba === "Pendente" ? "rgba(245,158,11,0.12)" : "rgba(52,211,153,0.12)",
@@ -331,8 +334,14 @@ export default function Controle() {
                       </span>
                     </td>
 
-                    <td style={{ padding: "14px 16px" }}>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                      {publicados.has(r.id) ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, background: "rgba(52,211,153,0.12)", color: "#34d399", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          Concluído
+                        </span>
+                      ) : (
+                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                         {/* Botão Fazer → navega para /qrcodes/publicacao com nome e CPF */}
                         <button
                           onClick={() => navigate("/qrcodes/publicacao", { state: { nome: r.nome, cpf: r.cpf ?? "" } })}
@@ -360,6 +369,7 @@ export default function Controle() {
                           </svg>
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}

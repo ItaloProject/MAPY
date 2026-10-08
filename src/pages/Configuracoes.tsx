@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import "../components/Layout.css";
+import { useOutletContext } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { iniciais, type UsuarioLogado } from "../lib/usuario";
 
 export default function Configuracoes() {
+  const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [notifEmail, setNotifEmail] = useState(true);
@@ -13,9 +16,10 @@ export default function Configuracoes() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) setEmail(user.email);
-      setNome(user?.user_metadata?.nome ?? user?.email?.split("@")[0] ?? "Administrador");
     });
   }, []);
+
+  useEffect(() => { if (usuario) setNome(usuario.nome); }, [usuario]);
 
   function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -42,10 +46,10 @@ export default function Configuracoes() {
                 background: "var(--accent)",
                 color: "#fff", fontSize: 18, fontWeight: 700,
                 display: "flex", alignItems: "center", justifyContent: "center"
-              }}>IT</div>
+              }}>{iniciais(nome || usuario?.nome || "")}</div>
               <div>
                 <div style={{ fontWeight: 600, color: "var(--fg)" }}>{nome}</div>
-                <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Administrador</div>
+                <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{usuario?.perfil ?? ""}</div>
                 <button type="button" className="btn-sm" style={{ marginTop: 8, fontSize: 12 }}>Alterar foto</button>
               </div>
             </div>

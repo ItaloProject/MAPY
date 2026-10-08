@@ -30,6 +30,37 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [adminMode,   setAdminMode]    = useState(false);
   const [adminEmail,  setAdminEmail]   = useState("");
   const [adminPass,   setAdminPass]    = useState("");
+  const adminRef = useRef(false);
+  adminRef.current = adminMode;
+
+  // Acesso por matrícula: segurar o cubo (~1s) troca a cor e libera matrícula + senha
+  const HOLD_MS = 900;
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdFired = useRef(false);
+  const [pressing, setPressing] = useState(false);
+
+  function startHold() {
+    if (etapa !== "chave") return;
+    holdFired.current = false;
+    setPressing(true);
+    holdTimer.current = setTimeout(() => {
+      holdFired.current = true;
+      setPressing(false);
+      setAdminMode(m => !m);
+      setChaveErr(null);
+      setSenhaErr(null);
+      try { navigator.vibrate?.(40); } catch {}
+    }, HOLD_MS);
+  }
+  function cancelHold() {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    setPressing(false);
+  }
+  function handleCubeClick() {
+    if (holdFired.current) { holdFired.current = false; return; }
+    if (etapa === "chave" && !adminRef.current) fileRef.current?.click();
+  }
 
   // ── Lê e valida o arquivo de chave ────────────────────────────────────────
   async function processarChave(file: File) {
@@ -112,10 +143,22 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   async function handleAdminSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSenhaErr(null);
+    const id = adminEmail.trim();
+    if (!id || !adminPass) { setSenhaErr("Informe matrícula e senha"); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: adminEmail, password: adminPass });
+    const email = id.includes("@") ? id : `${id}@emec.app`;
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: adminPass });
+    if (error || !data.user) { setLoading(false); setSenhaErr("Matrícula ou senha incorretas"); return; }
+    // Suspensão só é checada pela chave; aqui conferimos o status do cadastro
+    const { data: cad } = await supabase.from("usuarios").select("status").eq("auth_user_id", data.user.id).maybeSingle();
+    if (cad?.status === "Suspenso") {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setSenhaErr("Acesso suspenso. Procure o administrador.");
+      return;
+    }
     setLoading(false);
-    if (error) { setSenhaErr("Credenciais inválidas"); return; }
     setEtapa("success");
     setTimeout(() => { onLogin(); navigate("/dashboard"); }, 1000);
   }
@@ -131,9 +174,21 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         <div className="logo-row">
 
           {/* ── Cubo = zona de upload ── */}
+          <input ref={fileRef} type="file" accept=".csv" onChange={onFileChange} style={{ display: "none" }} />
           <div
             className="cube-wrap"
-            style={{ position: "relative", cursor: etapa === "chave" ? "pointer" : "default" }}
+            onClick={handleCubeClick}
+            onPointerDown={startHold}
+            onPointerUp={cancelHold}
+            onPointerLeave={cancelHold}
+            onPointerCancel={cancelHold}
+            onContextMenu={e => e.preventDefault()}
+            style={{
+              position: "relative", cursor: etapa === "chave" ? "pointer" : "default",
+              touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none",
+              WebkitTouchCallout: "none", WebkitTapHighlightColor: "transparent",
+              transform: pressing ? "scale(0.93)" : "scale(1)", transition: pressing ? "transform .9s ease-out" : "transform .2s ease",
+            } as React.CSSProperties}
             onDragOver={etapa === "chave" ? e => { e.preventDefault(); setDragging(true); } : undefined}
             onDragLeave={etapa === "chave" ? () => setDragging(false) : undefined}
             onDrop={etapa === "chave" ? onDrop : undefined}
@@ -144,6 +199,8 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               style={{
                 filter: dragging
                   ? "drop-shadow(0 0 16px #7DD43A) brightness(1.2)"
+                  : etapa === "chave" && adminMode
+                    ? "drop-shadow(0 0 12px rgba(56,189,248,0.6))"
                   : etapa === "chave"
                     ? "drop-shadow(0 0 8px rgba(125,212,58,0.4))"
                     : etapa === "senha"
@@ -152,9 +209,9 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                 transition: "filter .3s",
               }}
             >
-              <polygon points="39,4 74,23 39,42 4,23"  fill="#7DD43A"/>
-              <polygon points="4,23 39,42 39,76 4,57"  fill="#3A9A1E"/>
-              <polygon points="74,23 74,57 39,76 39,42" fill="#255E12"/>
+              <polygon points="39,4 74,23 39,42 4,23"  fill={adminMode ? "#38BDF8" : "#7DD43A"} style={{ transition: "fill .4s" }}/>
+              <polygon points="4,23 39,42 39,76 4,57"  fill={adminMode ? "#0EA5E9" : "#3A9A1E"} style={{ transition: "fill .4s" }}/>
+              <polygon points="74,23 74,57 39,76 39,42" fill={adminMode ? "#0369A1" : "#255E12"} style={{ transition: "fill .4s" }}/>
               <polygon points="39,8 70,25 39,38 8,25"  fill="url(#hl)" opacity="0.18"/>
               <defs>
                 <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
@@ -163,24 +220,6 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                 </linearGradient>
               </defs>
             </svg>
-
-            {/* Input invisível sobre o cubo */}
-            {etapa === "chave" && (
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".csv"
-                onChange={onFileChange}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  opacity: 0,
-                  cursor: "pointer",
-                  width: "100%",
-                  height: "100%",
-                }}
-              />
-            )}
 
             {/* Ícone de check quando chave validada */}
             {etapa === "senha" && (
@@ -294,15 +333,16 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         {etapa === "chave" && adminMode && (
           <>
             <div className="card-head">
-              <h2>Acesso administrativo</h2>
-              <p>Insira suas credenciais de administrador</p>
+              <h2>Acesso por matrícula</h2>
+              <p>Informe sua matrícula e senha para entrar sem o arquivo</p>
             </div>
             <form className="form" onSubmit={handleAdminSubmit} noValidate>
               <div className="field">
-                <label className="field-label">E-mail</label>
+                <label className="field-label">Matrícula</label>
                 <div className="input-wrap">
-                  <input type="email" className="input" autoFocus
-                    placeholder="admin@empresa.com"
+                  <input type="text" className="input" autoFocus
+                    inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username"
+                    placeholder="Ex.: 2026001"
                     value={adminEmail}
                     onChange={e => setAdminEmail(e.target.value)} />
                 </div>
@@ -310,7 +350,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               <div className="field">
                 <label className="field-label">Senha</label>
                 <div className="input-wrap">
-                  <input type="password" className="input"
+                  <input type="password" className="input" autoComplete="current-password"
                     placeholder="••••••••"
                     value={adminPass}
                     onChange={e => setAdminPass(e.target.value)} />

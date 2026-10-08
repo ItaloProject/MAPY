@@ -1,0 +1,19 @@
+{
+  "id": "/4c7913fce5eb",
+  "name": "e-mec.com.br",
+  "short_name": "e-MEC",
+  "description": "Painel de controle e publicações e-MEC",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/4c7913fce5eb",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#091420",
+  "theme_color": "#091420",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

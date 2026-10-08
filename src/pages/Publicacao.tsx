@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
+import { marcarConcluido } from "../lib/controle";
 import "../components/Layout.css";
 import "./Publicacao.css";
 
@@ -695,7 +696,7 @@ function TabClientes({ clientes, onEditar, onApagar }: { clientes: Cliente[]; on
                 <td style={{ color: "var(--fg-muted)", fontSize: 13 }}>{c.curso}</td>
                 <td><span className={`chip ${statusChip[c.status]}`}>{c.status}</span></td>
                 <td style={{ color: "var(--fg-muted)" }}>{c.data}</td>
-                <td style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <td style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
                   <button
                     className="btn-sm"
                     disabled={c.status !== "Publicado"}
@@ -1067,7 +1068,10 @@ export default function Publicacao() {
       .insert([row])
       .select()
       .single();
-    if (data) setClientes(prev => [rowToCliente(data as DBRow), ...prev]);
+    if (data) {
+      setClientes(prev => [rowToCliente(data as DBRow), ...prev]);
+      if (c.nome.trim()) await marcarConcluido(c.nome, c.cpf || null);
+    }
   }
 
   async function editarCliente(atualizado: Cliente) {

@@ -17,6 +17,12 @@
   --font:         "Inter", system-ui, sans-serif;
 }
 
+button, a, input, select { touch-action: manipulation; }
+
+@media (display-mode: standalone) {
+  html, body { overscroll-behavior-y: contain; }
+}
+
 html, body, #root {
   height: 100%;
   font-family: var(--font);

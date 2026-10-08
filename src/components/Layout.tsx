@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import "./Layout.css";
 import { supabase } from "../lib/supabase";
+import { iniciais, type UsuarioLogado } from "../lib/usuario";
 
 const navBase = [
   {
@@ -31,7 +32,10 @@ const navBase = [
   },
 ];
 
-export default function Layout({ onLogout, perfil }: { onLogout?: () => void; perfil?: string | null }) {
+export default function Layout({ onLogout, usuario }: { onLogout?: () => void; usuario?: UsuarioLogado | null }) {
+  const perfil = usuario?.perfil ?? null;
+  const nomeUsuario = usuario?.nome ?? "";
+  const siglas = usuario ? iniciais(usuario.nome) : "";
   const [collapsed,   setCollapsed]   = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [pendentes,   setPendentes]   = useState(0);
@@ -102,11 +106,11 @@ export default function Layout({ onLogout, perfil }: { onLogout?: () => void; pe
 
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="user-avatar">IT</div>
+            <div className="user-avatar">{siglas}</div>
             {!collapsed && (
               <div className="user-meta">
-                <span className="user-name">Italo</span>
-                <span className="user-role">Administrador</span>
+                <span className="user-name">{nomeUsuario}</span>
+                <span className="user-role">{perfil ?? ""}</span>
               </div>
             )}
           </div>
@@ -141,12 +145,12 @@ export default function Layout({ onLogout, perfil }: { onLogout?: () => void; pe
               {pendentes > 0 && <span className="topbar-badge">{pendentes}</span>}
             </button>
             <button className="topbar-btn" title="Perfil">
-              <div className="topbar-avatar">IT</div>
+              <div className="topbar-avatar">{siglas}</div>
             </button>
           </div>
         </header>
         <main className="main-content">
-          <Outlet />
+          <Outlet context={{ usuario }} />
         </main>
       </div>
     </div>
