@@ -86,18 +86,64 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
     return () => window.removeEventListener("resize", handler);
   }, []);
 
+  async function buscarPendentes() {
+    const { count } = await supabase
+      .from("publicacoes")
+      .select("*", { count: "exact", head: true })
+      .eq("pagamento_status", "pendente");
+    setPendentes(count ?? 0);
+  }
+
   useEffect(() => {
-    async function buscarPendentes() {
-      const { count } = await supabase
-        .from("publicacoes")
-        .select("*", { count: "exact", head: true })
-        .eq("pagamento_status", "pendente");
-      setPendentes(count ?? 0);
-    }
     buscarPendentes();
     const interval = setInterval(buscarPendentes, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  // Contador no ícone do app instalado (Android)
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    try {
+      if (pendentes > 0) nav.setAppBadge?.(pendentes)?.catch(() => {});
+      else nav.clearAppBadge?.()?.catch(() => {});
+    } catch { /* sem suporte */ }
+  }, [pendentes]);
+  useEffect(() => () => {
+    try { (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.()?.catch(() => {}); } catch { /* sem suporte */ }
+  }, []);
+
+  // Arrastar para atualizar (somente no app instalado)
+  const mainRef = useRef<HTMLElement>(null);
+  const pullStart = useRef<number | null>(null);
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const PULL_LIMIAR = 60;
+
+  function pullStartHandler(e: React.TouchEvent) {
+    if (!standalone || !isMobile || refreshing) return;
+    if ((mainRef.current?.scrollTop ?? 1) <= 0) pullStart.current = e.touches[0].clientY;
+  }
+  function pullMoveHandler(e: React.TouchEvent) {
+    if (pullStart.current === null) return;
+    const dy = e.touches[0].clientY - pullStart.current;
+    if (dy > 0 && (mainRef.current?.scrollTop ?? 1) <= 0) setPull(Math.min(90, dy * 0.5));
+    else setPull(0);
+  }
+  function pullEndHandler() {
+    if (pullStart.current === null) return;
+    pullStart.current = null;
+    if (pull >= PULL_LIMIAR) {
+      setRefreshing(true);
+      setPull(PULL_LIMIAR - 8);
+      setRefreshKey(k => k + 1);
+      buscarPendentes();
+      setTimeout(() => { setRefreshing(false); setPull(0); }, 900);
+    } else {
+      setPull(0);
+    }
+  }
 
   return (
     <div className={`layout ${collapsed ? "layout--collapsed" : ""} ${mobileOpen ? "layout--mobile-open" : ""}`}>
@@ -173,6 +219,15 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
       </aside>
 
       <div className="main-wrap">
+        {(pull > 0 || refreshing) && (
+          <div className="ptr" style={{ transform: `translate(-50%, ${pull}px)`, opacity: Math.min(1, pull / PULL_LIMIAR + (refreshing ? 1 : 0)) }}>
+            <span className={`ptr-ico${refreshing ? " is-spinning" : ""}`} style={{ transform: refreshing ? undefined : `rotate(${pull * 4}deg)` }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </span>
+          </div>
+        )}
         <header className="topbar">
           <div className="topbar-left">
             <div className="breadcrumb" id="page-title">{titulo}</div>
@@ -189,8 +244,8 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
             </button>
           </div>
         </header>
-        <main className="main-content">
-          <Outlet context={{ usuario }} />
+        <main className="main-content" ref={mainRef} onTouchStart={pullStartHandler} onTouchMove={pullMoveHandler} onTouchEnd={pullEndHandler} onTouchCancel={pullEndHandler}>
+          <Outlet key={refreshKey} context={{ usuario }} />
         </main>
 
         {isMobile && (

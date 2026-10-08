@@ -1066,7 +1066,7 @@ export default function Publicacao() {
   const navigate = useNavigate();
   const location = useLocation();
   const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
-  const [activeTab, setActiveTab] = useState<Tab>(prefill ? "novo" : "clientes");
+  const [activeTab, setActiveTab] = useState<Tab>(prefill || new URLSearchParams(location.search).get("aba") === "novo" ? "novo" : "clientes");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
 

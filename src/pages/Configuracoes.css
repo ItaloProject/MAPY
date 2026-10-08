@@ -45,3 +45,39 @@
   .cfg-sec { padding: 16px; }
   .cfg-sec .btn-sm { align-self: stretch; min-height: 48px; font-size: 14px; border-radius: 10px; text-align: center; }
 }
+
+/* ── Mensagens, janelas e bloco do aplicativo ── */
+.cfg-err { margin: 12px 0 0; font-size: 13px; color: #f87171; }
+.cfg-hint { margin: 0; font-size: 13px; color: var(--fg-muted); line-height: 1.5; }
+.cfg-app-ok { font-size: 14px; font-weight: 600; color: var(--success); }
+.cfg-sec .btn-sm:disabled { opacity: .5; cursor: not-allowed; }
+
+.cfg-toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999; max-width: 360px;
+  background: #0f1a27; border: 1px solid var(--accent); border-radius: 10px; padding: 12px 20px;
+  font-size: 13px; color: var(--fg); box-shadow: 0 8px 32px rgba(0, 0, 0, .35);
+}
+.cfg-backdrop {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: rgba(0, 0, 0, .65); backdrop-filter: blur(4px);
+}
+.cfg-sheet {
+  width: 100%; max-width: 420px; padding: 26px; border-radius: 14px; background: #0f1a27;
+  border: 1px solid var(--border); box-shadow: 0 24px 64px rgba(0, 0, 0, .5);
+}
+.cfg-sheet-title { margin: 0 0 16px; font-size: 17px; font-weight: 700; color: var(--fg); }
+.cfg-sheet-text { margin: 0 0 4px; font-size: 14px; line-height: 1.6; color: var(--fg-muted); }
+.cfg-sheet-text strong { color: var(--fg); }
+.cfg-sheet-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+@media (max-width: 768px) {
+  .cfg-toast { left: 14px; right: 14px; max-width: none; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .cfg-backdrop { align-items: flex-end; padding: 0; }
+  .cfg-sheet {
+    max-width: none; border-radius: 20px 20px 0 0; padding: 22px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    animation: cfgSheetUp .25s ease; max-height: 92vh; max-height: 92dvh; overflow-y: auto;
+  }
+  @keyframes cfgSheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .cfg-sheet-actions .btn-sm, .cfg-sheet-actions .btn-primary { flex: 1; min-height: 48px; font-size: 15px; border-radius: 10px; }
+  .cfg-install { min-height: 48px; font-size: 15px; border-radius: 10px; }
+}
