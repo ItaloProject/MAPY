@@ -370,7 +370,8 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
-    ativo: c.ativo,
+    // ativo e created_by são omitidos do insert: o banco usa default (true / null)
+    // após aplicar as migrations 011 e 012 no Supabase, os toggles passam a funcionar
   };
 }
 
@@ -1145,8 +1146,7 @@ export default function Publicacao() {
   }, []);
 
   async function adicionarCliente(c: Cliente) {
-    const { data: { user } } = await supabase.auth.getUser();
-    const row = { ...clienteToRow(c), created_by: user?.id ?? null };
+    const row = clienteToRow(c);
     const { data } = await supabase
       .from("publicacoes")
       .insert([row])

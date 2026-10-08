@@ -114,7 +114,7 @@ export default function PubViewer() {
       if (!id) return;
       const { data } = await supabase
         .from("publicacoes")
-        .select("nome,nascimento,cpf,rg,nome_mae,nome_pai,observacao,instituicao,inep,endereco,bairro,municipio,cep,modalidade,curso,ano_conclusao,data,protocolo,ativo")
+        .select("*")
         .eq("pub_id", id)
         .single();
       if (data) {
