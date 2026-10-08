@@ -99,11 +99,13 @@ export default function PubViewer() {
             onError={e => { const el = e.target as HTMLImageElement; el.replaceWith(Object.assign(document.createElement("span"), { textContent: "gov.br", style: { fontWeight: "900", fontSize: "18px", color: "#1351b4" } } as any)); }}
           />
           <div style={{ display: "flex", gap: 12, fontSize: 11, color: fg, alignItems: "center", fontWeight: "bold" }}>
-            <button onClick={toggleContraste} style={{ display: "flex", alignItems: "center", background: "none", border: 0, cursor: "pointer", font: "inherit", fontWeight: "bold", color: fg }}>
-              <span style={{ fontSize: 18, color: hi ? "#ff0" : "#0055aa" }}>☽</span>
+            <button onClick={toggleContraste} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: 0, cursor: "pointer", font: "inherit", fontWeight: "bold", color: fg }}>
+              <span style={{ fontSize: 16, color: hi ? "#ff0" : "#0055aa" }}>☽</span>
+              <span>Alto Contraste</span>
             </button>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ fontSize: 18, color: hi ? "#ff0" : "#0055aa" }}>👂</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 16, color: hi ? "#ff0" : "#0055aa" }}>👂</span>
+              <span>VLibras</span>
             </div>
           </div>
         </header>
