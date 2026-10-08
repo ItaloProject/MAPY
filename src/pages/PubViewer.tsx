@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
@@ -12,48 +12,58 @@ interface PubData {
 
 const STYLES = `
   * { box-sizing: border-box; }
-  .pub-wrap    { width: 100%; max-width: 500px; min-height: 100vh; margin: 0 auto; display: block; }
-  .pub-header  { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
-  .pub-logo    { height: 32px; width: auto; max-width: 110px; object-fit: contain; object-position: left center; }
-  .pub-a11y    { display: flex; gap: 14px; align-items: center; }
-  .pub-a11y-btn { display: flex; align-items: center; gap: 5px; background: none; border: 0; cursor: pointer; font-weight: 700; font-size: 11px; padding: 0; white-space: nowrap; }
-  .pub-a11y-tag { display: flex; align-items: center; gap: 5px; font-weight: 700; font-size: 11px; white-space: nowrap; }
-  .pub-a11y-txt { }
-  .pub-main    { padding: 16px; }
-  .pub-intro   { padding: 18px 16px; text-align: center; }
-  .pub-intro h1 { font-size: 16px; margin: 0 0 10px; font-weight: 700; line-height: 1.4; }
-  .pub-intro p  { font-size: 13px; line-height: 1.5; margin: 0; }
-  .pub-card    { border-radius: 4px; margin: 14px 0; }
-  .pub-card-title { margin: 0; padding: 10px 14px; font-size: 15px; font-weight: 700; text-align: center; }
-  .pub-card-body  { padding: 14px; font-size: 14px; line-height: 1.5; }
-  .pub-row     { margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-  .pub-row-label { font-weight: 700; }
-  .pub-legal   { border-radius: 4px; margin: 14px 0; padding: 14px; text-align: center; }
-  .pub-legal p { font-size: 13px; line-height: 1.5; margin: 4px 0; }
-  .pub-date    { border-radius: 4px; padding: 14px; text-align: center; margin-bottom: 30px; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
-  @media (max-width: 420px) {
-    .pub-header  { height: 54px; padding: 0 12px; }
-    .pub-logo    { height: 28px; max-width: 90px; }
-    .pub-a11y    { gap: 10px; }
+  .pub-root { width: 100%; min-height: 100vh; min-height: 100dvh; margin: 0; padding: 0; overflow-x: hidden;
+              font-family: Arial, Helvetica, sans-serif; background: var(--pub-page); color: var(--pub-fg); }
+  .pub-wrap { width: 100%; max-width: 520px; margin: 0 auto; background: var(--pub-inner);
+              min-height: 100vh; min-height: 100dvh; }
+  .pub-wrap--z { min-height: 0; }
+
+  .pub-header  { height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                 padding: 0 16px; background: var(--pub-inner); }
+  .pub-logo    { height: 30px; width: auto; max-width: 110px; object-fit: contain; object-position: left center; flex-shrink: 0; }
+  .pub-a11y    { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .pub-a11y-btn, .pub-a11y-tag { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 0 8px;
+                 background: none; border: 0; font: inherit; font-weight: 700; font-size: 12px; white-space: nowrap; color: inherit; }
+  .pub-a11y-btn { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .pub-a11y-ico { font-size: 16px; }
+
+  .pub-main    { padding: 14px; }
+  .pub-intro   { padding: 18px 14px; text-align: center; }
+  .pub-intro h1 { font-size: 17px; line-height: 1.35; margin: 0 0 10px; font-weight: 700; }
+  .pub-intro p  { font-size: 13px; line-height: 1.5; margin: 0; overflow-wrap: anywhere; }
+
+  .pub-card    { border-radius: 4px; margin: 14px 0; overflow: hidden; }
+  .pub-card-title { margin: 0; padding: 12px 14px; font-size: 16px; font-weight: 700; text-align: center; line-height: 1.3; }
+  .pub-card-body  { padding: 14px; font-size: 15px; line-height: 1.45; }
+
+  .pub-row     { display: flex; flex-wrap: wrap; gap: 2px 6px; padding: 8px 0; border-bottom: 1px solid var(--pub-line); }
+  .pub-row:first-child { padding-top: 0; }
+  .pub-row:last-child  { padding-bottom: 0; border-bottom: 0; }
+  .pub-row-label { font-weight: 700; }
+  .pub-row-value { overflow-wrap: anywhere; min-width: 0; }
+
+  .pub-legal   { border-radius: 4px; margin: 14px 0; padding: 16px 14px; text-align: center; }
+  .pub-legal p { font-size: 13px; line-height: 1.5; margin: 4px 0; }
+  .pub-date    { border-radius: 4px; padding: 14px; text-align: center; margin-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); font-size: 14px; }
+
+  @media (min-width: 480px) {
+    .pub-header { height: 64px; }
+    .pub-main   { padding: 20px; }
+    .pub-intro h1 { font-size: 18px; }
+  }
+  @media (max-width: 340px) {
     .pub-a11y-txt { display: none; }
-    .pub-main    { padding: 12px; }
-    .pub-intro   { padding: 14px 12px; }
-    .pub-intro h1 { font-size: 14px; }
-    .pub-card-title { font-size: 13px; padding: 9px 12px; }
-    .pub-card-body  { padding: 12px; font-size: 13px; }
-    .pub-legal p { font-size: 12px; }
+    .pub-card-body { padding: 12px; font-size: 14px; }
   }
 `;
 
 function Card({ title, children, hi }: { title: string; children: React.ReactNode; hi: boolean }) {
   const border = hi ? "#ff0" : "#ddd";
-  const bg     = hi ? "#000" : "#f9f9f9";
-  const titleBg = hi ? "#000" : "#eee";
-  const titleFg = hi ? "#ff0" : "#333";
   return (
-    <section className="pub-card" style={{ border: `1px solid ${border}`, background: bg }}>
-      <h2 className="pub-card-title" style={{ borderBottom: `1px solid ${border}`, background: titleBg, color: titleFg }}>
+    <section className="pub-card" style={{ border: `1px solid ${border}`, background: hi ? "#000" : "#f9f9f9" }}>
+      <h2 className="pub-card-title" style={{ borderBottom: `1px solid ${border}`, background: hi ? "#000" : "#eee", color: hi ? "#ff0" : "#333" }}>
         {title}
       </h2>
       <div className="pub-card-body">{children}</div>
@@ -62,23 +72,37 @@ function Card({ title, children, hi }: { title: string; children: React.ReactNod
 }
 
 function Row({ label, value, hi }: { label: string; value: string; hi: boolean }) {
-  const c = hi ? "#ff0" : "#333";
   return (
-    <div className="pub-row" style={{ color: c }}>
+    <div className="pub-row" style={{ color: hi ? "#ff0" : "#333" }}>
       <span className="pub-row-label">{label}:</span>
-      <span>{value || "—"}</span>
+      <span className="pub-row-value">{value || "—"}</span>
     </div>
   );
+}
+
+// Alguns navegadores móveis (modo "Site para computador", webviews) montam a página
+// com ~980px de largura e encolhem tudo. Detecta isso e escala para caber na tela.
+function detectZoom(): number {
+  try {
+    if (navigator.maxTouchPoints < 1) return 1;
+    const sw = window.screen.width;
+    const iw = window.innerWidth;
+    if (sw > 0 && sw < 800 && iw > sw * 1.25) return iw / sw;
+  } catch {}
+  return 1;
 }
 
 export default function PubViewer() {
   const { id } = useParams<{ id: string }>();
   const [pub, setPub] = useState<PubData | null>(null);
   const [hi, setHi] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [dataConsulta] = useState(() => {
     const n = new Date();
     return n.toLocaleDateString("pt-BR") + " " + n.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   });
+
+  useLayoutEffect(() => { setZoom(detectZoom()); }, []);
 
   useEffect(() => {
     async function load() {
@@ -112,11 +136,27 @@ export default function PubViewer() {
     });
   }
 
-  const fg       = hi ? "#ff0" : "#333";
-  const pageBg   = hi ? "#000" : "#f5f5f5";
-  const innerBg  = hi ? "#000" : "#fff";
+  const fg        = hi ? "#ff0" : "#333";
+  const innerBg   = hi ? "#000" : "#fff";
+  const pageBg    = zoom > 1 ? innerBg : (hi ? "#000" : "#f5f5f5");
   const borderClr = hi ? "#ff0" : "#ddd";
-  const greenBorder = hi ? "#ff0" : "#00995d";
+  const accent    = hi ? "#ff0" : "#0055aa";
+
+  // Cor do fundo atrás da página (overscroll / áreas fora do #root)
+  useEffect(() => {
+    const prevHtml = document.documentElement.style.background;
+    const prevBody = document.body.style.background;
+    document.documentElement.style.background = pageBg;
+    document.body.style.background = pageBg;
+    return () => {
+      document.documentElement.style.background = prevHtml;
+      document.body.style.background = prevBody;
+    };
+  }, [pageBg]);
+
+  const vars = {
+    "--pub-page": pageBg, "--pub-inner": innerBg, "--pub-fg": fg, "--pub-line": hi ? "#665" : "#e3e3e3",
+  } as React.CSSProperties;
 
   if (!pub) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg, color: fg, padding: 20 }}>
@@ -129,13 +169,12 @@ export default function PubViewer() {
   );
 
   return (
-    <div style={{ margin: 0, padding: 0, width: "100%", background: pageBg, fontFamily: "Arial, sans-serif", color: fg, minHeight: "100vh" }}>
+    <div className="pub-root" style={vars}>
       <style>{STYLES}</style>
 
-      <div className="pub-wrap" style={{ background: innerBg }}>
+      <div className={`pub-wrap${zoom > 1 ? " pub-wrap--z" : ""}`} style={zoom > 1 ? { zoom } : undefined}>
 
-        {/* Header */}
-        <header className="pub-header" style={{ background: innerBg, borderBottom: `2px solid ${greenBorder}` }}>
+        <header className="pub-header" style={{ borderBottom: `2px solid ${hi ? "#ff0" : "#00995d"}` }}>
           <img
             className="pub-logo"
             src="/govnovo.png"
@@ -148,42 +187,35 @@ export default function PubViewer() {
               el.replaceWith(span);
             }}
           />
-          <div className="pub-a11y" style={{ color: fg }}>
-            <button
-              className="pub-a11y-btn"
-              onClick={toggleContraste}
-              style={{ color: fg }}
-            >
-              <span style={{ fontSize: 15, color: hi ? "#ff0" : "#0055aa" }}>☽</span>
+          <div className="pub-a11y">
+            <button className="pub-a11y-btn" onClick={toggleContraste} aria-pressed={hi}>
+              <span className="pub-a11y-ico" style={{ color: accent }}>☽</span>
               <span className="pub-a11y-txt">Alto Contraste</span>
             </button>
-            <div className="pub-a11y-tag" style={{ color: fg }}>
-              <span style={{ fontSize: 15, color: hi ? "#ff0" : "#0055aa" }}>👂</span>
+            <div className="pub-a11y-tag">
+              <span className="pub-a11y-ico" style={{ color: accent }}>👂</span>
               <span className="pub-a11y-txt">VLibras</span>
             </div>
           </div>
         </header>
 
         <main className="pub-main">
-          {/* Intro */}
           <section className="pub-intro" style={{ background: hi ? "#000" : "#f4f4f4", border: `1px solid ${borderClr}` }}>
-            <h1 style={{ color: fg }}>
-              Publicação processada em DOU de {pub.data}
-            </h1>
-            <p style={{ color: fg }}>
+            <h1>Publicação processada em DOU de {pub.data}</h1>
+            <p>
               PROTOCOLO {pub.protocolo}<br />
               REGISTRADO DE ACORDO COM A LEI SEB 738329/2025 e SEE 98483/2025
             </p>
           </section>
 
           <Card title="Dados do Aluno" hi={hi}>
-            <Row label="Nome do Aluno"       value={pub.nome}        hi={hi} />
-            <Row label="Data de Nascimento"  value={pub.nascimento}  hi={hi} />
-            <Row label="CPF"                 value={pub.cpf}         hi={hi} />
-            <Row label="RG/RNE/RA"           value={pub.rg}          hi={hi} />
-            <Row label="Nome da Mãe"         value={pub.nomeMae}     hi={hi} />
-            <Row label="Nome do Pai"         value={pub.nomePai}     hi={hi} />
-            <Row label="Observações"         value={pub.observacao}  hi={hi} />
+            <Row label="Nome do Aluno"      value={pub.nome}       hi={hi} />
+            <Row label="Data de Nascimento" value={pub.nascimento} hi={hi} />
+            <Row label="CPF"                value={pub.cpf}        hi={hi} />
+            <Row label="RG/RNE/RA"          value={pub.rg}         hi={hi} />
+            <Row label="Nome da Mãe"        value={pub.nomeMae}    hi={hi} />
+            <Row label="Nome do Pai"        value={pub.nomePai}    hi={hi} />
+            <Row label="Observações"        value={pub.observacao} hi={hi} />
           </Card>
 
           <Card title="Dados da Instituição" hi={hi}>
@@ -197,20 +229,20 @@ export default function PubViewer() {
           </Card>
 
           <Card title="RESUMO DA PUBLICAÇÃO" hi={hi}>
-            <Row label="Curso"             value={pub.curso}        hi={hi} />
-            <Row label="Ano de Conclusão"  value={pub.anoConclusao} hi={hi} />
-            <Row label="Data Publicação"   value={pub.data}         hi={hi} />
+            <Row label="Curso"            value={pub.curso}        hi={hi} />
+            <Row label="Ano de Conclusão" value={pub.anoConclusao} hi={hi} />
+            <Row label="Data Publicação"  value={pub.data}         hi={hi} />
           </Card>
 
           <section className="pub-legal" style={{ background: innerBg, border: `1px solid ${borderClr}` }}>
-            <p style={{ color: fg, fontWeight: "bold", marginBottom: 8 }}>Fundamento Legal:</p>
-            <p style={{ color: fg }}>Resolução SE Nº 108 de 25, publicada no DOU de 26/06/2002.</p>
-            <p style={{ color: fg, fontWeight: "bold", marginTop: 12 }}>** Esta publicação não substitui documentos escolares. **</p>
+            <p style={{ fontWeight: "bold", marginBottom: 8 }}>Fundamento Legal:</p>
+            <p>Resolução SE Nº 108 de 25, publicada no DOU de 26/06/2002.</p>
+            <p style={{ fontWeight: "bold", marginTop: 12 }}>** Esta publicação não substitui documentos escolares. **</p>
           </section>
 
           <section className="pub-date" style={{ background: innerBg, border: `1px solid ${borderClr}` }}>
-            <div style={{ fontSize: 14, fontWeight: "bold", color: fg }}>Data e Hora da Consulta:</div>
-            <div style={{ fontSize: 14, color: fg }}>{dataConsulta}</div>
+            <div style={{ fontWeight: "bold" }}>Data e Hora da Consulta:</div>
+            <div>{dataConsulta}</div>
           </section>
         </main>
       </div>
