@@ -402,6 +402,18 @@ function QRDisplay({ cliente, size = 245 }: { cliente: Cliente; size?: number })
 
 /* ── Modal QR ── */
 function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
+  const [copiado, setCopiado] = useState(false);
+  async function compartilhar() {
+    const dados = { title: "Publicação e-MEC", text: `Publicação de ${cliente.nome}`, url: cliente.url };
+    try {
+      if (navigator.share) await navigator.share(dados);
+      else {
+        await navigator.clipboard.writeText(cliente.url);
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 2000);
+      }
+    } catch { /* cancelado pelo usuário */ }
+  }
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -478,6 +490,7 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
           )}
         </div>
         <div className="modal-footer">
+          {cliente.url && <button className="btn-sm" onClick={compartilhar}>{copiado ? "Link copiado ✓" : "Compartilhar"}</button>}
           {cliente.url && <button className="btn-sm" onClick={baixar}>Baixar PNG</button>}
           <button className="btn-sm" onClick={onClose}>Fechar</button>
         </div>
@@ -679,57 +692,66 @@ function TabClientes({ clientes, onEditar, onApagar }: { clientes: Cliente[]; on
       <div className="tab-toolbar">
         <input className="search-input" placeholder="Buscar por nome ou CPF…"
           value={search} onChange={e => setSearch(e.target.value)} />
-        <button className="btn-primary">+ Adicionar cliente</button>
+        <button className="btn-primary pub-add-desktop">+ Adicionar cliente</button>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className="data-table">
+      <div className="pub-table-wrap">
+        <table className="data-table pub-table">
           <thead>
             <tr><th>Nome</th><th>CPF</th><th>Curso</th><th>Status</th><th>Publicado em</th><th></th></tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={6}><div className="empty-state"><p>Nenhum cliente encontrado</p></div></td></tr>
+              <tr className="pub-empty"><td colSpan={6}><div className="empty-state"><p>Nenhum cliente encontrado</p></div></td></tr>
             ) : filtered.map(c => (
-              <tr key={c.id}>
-                <td style={{ fontWeight: 600 }}>{c.nome}</td>
-                <td style={{ fontFamily: "monospace", fontSize: 13, color: "var(--fg-muted)" }}>{c.cpf}</td>
-                <td style={{ color: "var(--fg-muted)", fontSize: 13 }}>{c.curso}</td>
-                <td><span className={`chip ${statusChip[c.status]}`}>{c.status}</span></td>
-                <td style={{ color: "var(--fg-muted)" }}>{c.data}</td>
-                <td style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
-                  <button
-                    className="btn-sm"
-                    disabled={c.status !== "Publicado"}
-                    title={c.status === "Publicado" ? "Ver arquivo" : "Ainda não publicado"}
-                    onClick={() => c.url ? window.open(c.url, "_blank") : undefined}
-                    style={{ opacity: c.status === "Publicado" ? 1 : 0.4, cursor: c.status === "Publicado" ? "pointer" : "default" }}
-                  >Ver</button>
-                  <button className="btn-sm" onClick={() => setEditCliente(c)}>Editar</button>
-                  <button
-                    className="btn-sm btn-icon"
-                    title={c.pagamentoStatus === "pendente" ? "QR Code — pagamento pendente" : "QR Code — pagamento em dia"}
-                    onClick={() => setQrCliente(c)}
-                    style={{
-                      color: c.pagamentoStatus === "pendente" ? "#f87171" : "#34d399",
-                      borderColor: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.5)" : "rgba(52,211,153,0.5)",
-                      background: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.08)" : "rgba(52,211,153,0.08)",
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/>
-                      <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
-                    </svg>
-                  </button>
-                  <button
-                    className="btn-sm btn-icon"
-                    title="Apagar publicação"
-                    onClick={() => setDelCliente(c)}
-                    style={{ color: "#f87171" }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                    </svg>
-                  </button>
+              <tr key={c.id} className="pub-row">
+                <td className="pc-title">{c.nome}</td>
+                <td className="pc-line pc-cpf" data-label="CPF">{c.cpf}</td>
+                <td className="pc-line pc-curso" data-label="Curso">{c.curso}</td>
+                <td className="pc-badge"><span className={`chip ${statusChip[c.status]}`}>{c.status}</span></td>
+                <td className="pc-line pc-data" data-label="Publicado em">{c.data}</td>
+                <td className="pc-line pc-pag" data-label="Pagamento">
+                  <span className={`chip ${c.pagamentoStatus === "pendente" ? "chip--red" : "chip--green"}`}>
+                    {c.pagamentoStatus === "pendente" ? "Pendente" : "Em dia"}
+                  </span>
+                </td>
+                <td className="pc-actions">
+                  <div className="pub-actions">
+                    <button
+                      className="btn-sm pub-act"
+                      disabled={c.status !== "Publicado"}
+                      title={c.status === "Publicado" ? "Ver arquivo" : "Ainda não publicado"}
+                      onClick={() => c.url ? window.open(c.url, "_blank") : undefined}
+                      style={{ opacity: c.status === "Publicado" ? 1 : 0.4, cursor: c.status === "Publicado" ? "pointer" : "default" }}
+                    >Ver</button>
+                    <button className="btn-sm pub-act" onClick={() => setEditCliente(c)}>Editar</button>
+                    <button
+                      className="btn-sm btn-icon"
+                      title={c.pagamentoStatus === "pendente" ? "QR Code — pagamento pendente" : "QR Code — pagamento em dia"}
+                      aria-label="QR Code"
+                      onClick={() => setQrCliente(c)}
+                      style={{
+                        color: c.pagamentoStatus === "pendente" ? "#f87171" : "#34d399",
+                        borderColor: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.5)" : "rgba(52,211,153,0.5)",
+                        background: c.pagamentoStatus === "pendente" ? "rgba(248,113,113,0.08)" : "rgba(52,211,153,0.08)",
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/>
+                        <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/>
+                      </svg>
+                    </button>
+                    <button
+                      className="btn-sm btn-icon"
+                      title="Apagar publicação"
+                      aria-label="Apagar publicação"
+                      onClick={() => setDelCliente(c)}
+                      style={{ color: "#f87171" }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -855,7 +877,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
           </a>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="pub-done-actions">
           <button className="btn-sm" onClick={() => window.open(gerado.url, "_blank")}>Ver página</button>
           <button className="btn-primary" onClick={novaPublicacao}>+ Nova publicação</button>
         </div>
@@ -913,7 +935,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
       </div>
       <div className="edit-footer">
         <span />
-        <div style={{ display: "flex", gap: 10 }}>
+        <div className="edit-actions">
           <button type="button" className="btn-sm" onClick={() => setForm(formVazio)}>Limpar</button>
           <button type="submit" className="btn-primary">Gerar Publicação</button>
         </div>
@@ -945,21 +967,21 @@ function TabHistorico({ clientes }: { clientes: Cliente[] }) {
   const publicados = clientes.filter(c => c.status === "Publicado");
   return (
     <div className="tab-body">
-      <div style={{ overflowX: "auto" }}>
-        <table className="data-table">
+      <div className="pub-table-wrap">
+        <table className="data-table pub-table">
           <thead>
             <tr><th>Protocolo</th><th>Nome</th><th>Status</th><th>Publicado em</th><th>Modalidade</th></tr>
           </thead>
           <tbody>
             {publicados.length === 0 ? (
-              <tr><td colSpan={5}><div className="empty-state"><p>Nenhuma publicação encontrada</p></div></td></tr>
+              <tr className="pub-empty"><td colSpan={5}><div className="empty-state"><p>Nenhuma publicação encontrada</p></div></td></tr>
             ) : publicados.map(c => (
-              <tr key={c.pubId}>
-                <td style={{ fontFamily: "monospace", fontSize: 13, color: "var(--accent)" }}>{c.protocolo}</td>
-                <td style={{ fontWeight: 600 }}>{c.nome}</td>
-                <td><span className="chip chip--green">Publicado</span></td>
-                <td style={{ color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{c.data}</td>
-                <td style={{ color: "var(--fg-muted)" }}>{c.modalidade}</td>
+              <tr key={c.pubId} className="pub-row">
+                <td className="pc-line pc-proto" data-label="Protocolo">{c.protocolo}</td>
+                <td className="pc-title">{c.nome}</td>
+                <td className="pc-badge"><span className="chip chip--green">Publicado</span></td>
+                <td className="pc-line pc-data" data-label="Publicado em">{c.data}</td>
+                <td className="pc-line pc-curso" data-label="Modalidade">{c.modalidade}</td>
               </tr>
             ))}
           </tbody>
@@ -1095,7 +1117,7 @@ export default function Publicacao() {
 
   return (
     <>
-      <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div className="page-header pub-page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div>
           <div className="breadcrumb-path">
             <button className="breadcrumb-btn" onClick={() => navigate("/qrcodes")}>QRCodes</button>
@@ -1105,13 +1127,13 @@ export default function Publicacao() {
           <h1 className="page-title" style={{ marginTop: 6 }}>Publicação</h1>
           <p className="page-sub">Geração e gestão de publicações no Diário Oficial</p>
         </div>
-        <button className="btn-primary" style={{ alignSelf: "flex-end", marginBottom: 4 }}
+        <button className="btn-primary pub-new-btn" style={{ alignSelf: "flex-end", marginBottom: 4 }}
           onClick={() => setActiveTab("novo")}>
           + Nova publicação
         </button>
       </div>
 
-      <div className="section-card">
+      <div className="section-card pub-shell">
         <div className="pub-tabs">
           {tabs.map(t => (
             <button key={t.id}
@@ -1137,6 +1159,14 @@ export default function Publicacao() {
           )}
         </div>
       </div>
+
+      {activeTab !== "novo" && !dbLoading && (
+        <button className="pub-fab" onClick={() => setActiveTab("novo")} aria-label="Nova publicação">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      )}
 
       <style>{`
         @keyframes spin{to{transform:rotate(360deg)}}

@@ -159,3 +159,117 @@
 .prev-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .prev-label { font-weight: 700; color: var(--fg); }
 .prev-value { color: var(--fg-muted); }
+
+/* ══════════ Tabelas / cartões (base desktop) ══════════ */
+.pub-table-wrap { overflow-x: auto; }
+.pc-title { font-weight: 600; }
+.pc-cpf, .pc-proto { font-family: monospace; font-size: 13px; }
+.pc-cpf { color: var(--fg-muted); }
+.pc-proto { color: var(--accent); }
+.pc-curso { color: var(--fg-muted); font-size: 13px; }
+.pc-data { color: var(--fg-muted); white-space: nowrap; }
+.pc-pag { display: none; }
+.pub-actions { display: flex; gap: 6px; align-items: center; justify-content: center; }
+.pub-fab { display: none; }
+.pub-done-actions, .edit-actions { display: flex; gap: 10px; }
+.modal-backdrop .modal-box { background: #0f1a27; }
+
+/* ══════════ Celular / PWA ══════════ */
+@media (max-width: 768px) {
+  .pub-page-header { margin-bottom: 14px; }
+  .pub-page-header .page-title { margin-top: 4px !important; }
+  .pub-new-btn, .pub-add-desktop { display: none; }
+
+  /* Casca sem moldura + abas fixas no topo */
+  .pub-shell { background: none; border: 0; border-radius: 0; overflow: visible; margin-bottom: 0; }
+  .pub-tabs {
+    position: sticky; top: -1px; z-index: 20; background: var(--bg);
+    margin: 0 -14px; padding: 0 14px; gap: 0; overflow: visible; border-bottom: 1px solid var(--border);
+  }
+  .pub-tab { flex: 1; min-height: 48px; padding: 14px 2px; font-size: 12px; letter-spacing: .03em; text-align: center; }
+  .pub-tab-content { min-height: 0; }
+  .tab-body { padding: 14px 0 96px; }
+  form.tab-body { padding-bottom: 0; }
+  .tab-toolbar { margin-bottom: 14px; }
+  .tab-toolbar .search-input { flex: 1 1 100%; width: 100%; min-width: 0; min-height: 46px; font-size: 16px; }
+
+  /* Tabela -> cartões */
+  .pub-table-wrap { overflow: visible; }
+  .pub-table.data-table { display: block; min-width: 0; }
+  .pub-table thead { display: none; }
+  .pub-table tbody { display: block; }
+  .pub-table .pub-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0; padding: 14px; margin-bottom: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  }
+  .pub-table td { display: block; padding: 0; border: 0; text-align: left; background: none; }
+  .pub-table tbody tr:hover td { background: none; }
+  .pub-table td.pc-title {
+    grid-column: 1; grid-row: 1; align-self: center; padding: 0 12px 12px 0; border-bottom: 1px solid var(--border);
+    font-size: 15px; font-weight: 700; overflow-wrap: anywhere;
+  }
+  .pub-table td.pc-badge { grid-column: 2; grid-row: 1; align-self: stretch; display: flex; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .pub-table td.pc-line {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin-top: 12px; font-size: 14px; color: var(--fg); text-align: right; overflow-wrap: anywhere;
+  }
+  .pub-table td.pc-line::before {
+    content: attr(data-label); flex-shrink: 0; text-align: left; font-family: var(--font); font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--fg-muted);
+  }
+  .pub-table td.pc-line:empty { display: none; }
+  .pub-table td.pc-actions { grid-column: 1 / -1; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .pub-empty { display: block; }
+
+  .pub-actions { gap: 8px; }
+  .pub-actions .btn-sm { min-height: 46px; font-size: 14px; border-radius: 10px; }
+  .pub-actions .pub-act { flex: 1; }
+  .pub-actions .btn-icon { width: 50px; padding: 0; }
+
+  /* Botão flutuante */
+  .pub-fab {
+    display: flex; align-items: center; justify-content: center; position: fixed; z-index: 50;
+    right: 18px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; border-radius: 50%;
+    border: 0; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 8px 24px rgba(14, 165, 233, .45);
+    -webkit-tap-highlight-color: transparent; transition: transform .12s;
+  }
+  .pub-fab:active { transform: scale(.93); }
+
+  /* Formulário */
+  .edit-sections { gap: 16px; }
+  .edit-grid { grid-template-columns: 1fr; padding: 14px; gap: 14px; }
+  .edit-label { font-size: 13px; }
+  .edit-input { min-height: 48px; font-size: 16px; padding: 10px 14px; }
+  form.tab-body .edit-footer {
+    position: sticky; bottom: 0; z-index: 15; margin: 18px -14px 0; background: var(--bg);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .edit-footer > span { display: none; }
+  .edit-actions { width: 100%; }
+  .edit-actions .btn-sm { flex: 0 0 96px; min-height: 48px; border-radius: 10px; }
+  .edit-actions .btn-primary { flex: 1; min-height: 48px; font-size: 15px; border-radius: 10px; }
+
+  /* Publicação gerada */
+  .pub-done-actions { flex-direction: column; width: 100%; }
+  .pub-done-actions .btn-sm, .pub-done-actions .btn-primary { min-height: 48px; font-size: 15px; border-radius: 10px; }
+
+  /* Visualizar */
+  .tab-body select.edit-input { max-width: none !important; }
+
+  /* Janelas viram folhas deslizantes */
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal-backdrop .modal-box {
+    max-width: none !important; max-height: 92vh; max-height: 92dvh; border-radius: 20px 20px 0 0;
+    animation: pubSheetUp .25s ease; padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .modal-backdrop .modal-box::before {
+    content: ""; display: block; flex-shrink: 0; width: 40px; height: 4px; margin: 8px auto 0;
+    border-radius: 4px; background: rgba(255, 255, 255, .2);
+  }
+  @keyframes pubSheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal-header { padding: 14px 18px; }
+  .modal-body { padding: 16px 18px !important; }
+  .modal-footer { padding: 12px 18px; flex-wrap: wrap; }
+  .modal-footer .btn-sm, .modal-footer .btn-primary { flex: 1 1 40%; min-height: 46px; font-size: 14px; border-radius: 10px; }
+  .modal-close { width: 40px; height: 40px; align-items: center; justify-content: center; }
+}
