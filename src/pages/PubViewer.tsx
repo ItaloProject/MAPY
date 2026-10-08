@@ -53,8 +53,12 @@ const STYLES = `
     .pub-main   { padding: 20px; }
     .pub-intro h1 { font-size: 18px; }
   }
-  @media (max-width: 340px) {
+  @media (max-width: 479px) {
     .pub-a11y-txt { display: none; }
+    .pub-a11y { gap: 6px; }
+  }
+  .pub-wrap--z .pub-a11y-txt { display: none; }
+  @media (max-width: 340px) {
     .pub-card-body { padding: 12px; font-size: 14px; }
   }
 `;
