@@ -99,6 +99,7 @@ function detectZoom(): number {
 export default function PubViewer() {
   const { id } = useParams<{ id: string }>();
   const [pub, setPub] = useState<PubData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [desativado, setDesativado] = useState(false);
   const [hi, setHi] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -111,23 +112,26 @@ export default function PubViewer() {
 
   useEffect(() => {
     async function load() {
-      if (!id) return;
+      if (!id) { setLoading(false); return; }
       const { data } = await supabase
         .from("publicacoes")
         .select("*")
         .eq("pub_id", id)
         .single();
       if (data) {
-        if (data.ativo === false) { setDesativado(true); return; }
-        setPub({
-          nome: data.nome, nascimento: data.nascimento, cpf: data.cpf, rg: data.rg,
-          nomeMae: data.nome_mae, nomePai: data.nome_pai, observacao: data.observacao,
-          instituicao: data.instituicao, inep: data.inep, endereco: data.endereco,
-          bairro: data.bairro, municipio: data.municipio, cep: data.cep,
-          modalidade: data.modalidade, curso: data.curso, anoConclusao: data.ano_conclusao,
-          data: data.data, protocolo: data.protocolo,
-        });
+        if (data.ativo === false) { setDesativado(true); }
+        else {
+          setPub({
+            nome: data.nome, nascimento: data.nascimento, cpf: data.cpf, rg: data.rg,
+            nomeMae: data.nome_mae, nomePai: data.nome_pai, observacao: data.observacao,
+            instituicao: data.instituicao, inep: data.inep, endereco: data.endereco,
+            bairro: data.bairro, municipio: data.municipio, cep: data.cep,
+            modalidade: data.modalidade, curso: data.curso, anoConclusao: data.ano_conclusao,
+            data: data.data, protocolo: data.protocolo,
+          });
+        }
       }
+      setLoading(false);
     }
     load();
     try {
@@ -163,6 +167,13 @@ export default function PubViewer() {
   const vars = {
     "--pub-page": pageBg, "--pub-inner": innerBg, "--pub-fg": fg, "--pub-line": hi ? "#665" : "#e3e3e3",
   } as React.CSSProperties;
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg }}>
+      <div style={{ width: 36, height: 36, border: "3px solid #ccc", borderTopColor: "#0055aa", borderRadius: "50%", animation: "pubSpin .7s linear infinite" }} />
+      <style>{`@keyframes pubSpin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
 
   if (desativado) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg, color: fg, padding: 20 }}>
