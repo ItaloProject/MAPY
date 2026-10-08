@@ -99,6 +99,7 @@ function detectZoom(): number {
 export default function PubViewer() {
   const { id } = useParams<{ id: string }>();
   const [pub, setPub] = useState<PubData | null>(null);
+  const [desativado, setDesativado] = useState(false);
   const [hi, setHi] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [dataConsulta] = useState(() => {
@@ -113,10 +114,11 @@ export default function PubViewer() {
       if (!id) return;
       const { data } = await supabase
         .from("publicacoes")
-        .select("nome,nascimento,cpf,rg,nome_mae,nome_pai,observacao,instituicao,inep,endereco,bairro,municipio,cep,modalidade,curso,ano_conclusao,data,protocolo")
+        .select("nome,nascimento,cpf,rg,nome_mae,nome_pai,observacao,instituicao,inep,endereco,bairro,municipio,cep,modalidade,curso,ano_conclusao,data,protocolo,ativo")
         .eq("pub_id", id)
         .single();
       if (data) {
+        if (data.ativo === false) { setDesativado(true); return; }
         setPub({
           nome: data.nome, nascimento: data.nascimento, cpf: data.cpf, rg: data.rg,
           nomeMae: data.nome_mae, nomePai: data.nome_pai, observacao: data.observacao,
@@ -161,6 +163,16 @@ export default function PubViewer() {
   const vars = {
     "--pub-page": pageBg, "--pub-inner": innerBg, "--pub-fg": fg, "--pub-line": hi ? "#665" : "#e3e3e3",
   } as React.CSSProperties;
+
+  if (desativado) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg, color: fg, padding: 20 }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>Publicação desativada</h2>
+        <p style={{ color: "#888", margin: 0, fontSize: 14 }}>Esta publicação foi temporariamente desativada.<br />Entre em contato com a instituição para mais informações.</p>
+      </div>
+    </div>
+  );
 
   if (!pub) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "sans-serif", background: pageBg, color: fg, padding: 20 }}>

@@ -335,6 +335,7 @@ interface Cliente {
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
   protocolo: string; url: string;
   pagamentoStatus: "pendente" | "pago";
+  ativo: boolean;
 }
 
 type DBRow = {
@@ -343,6 +344,7 @@ type DBRow = {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
   pagamento_status?: "pendente" | "pago";
+  ativo?: boolean;
 };
 
 function rowToCliente(r: DBRow): Cliente {
@@ -354,6 +356,7 @@ function rowToCliente(r: DBRow): Cliente {
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
     pagamentoStatus: r.pagamento_status === "pago" ? "pago" : "pendente",
+    ativo: r.ativo !== false,
   };
 }
 
@@ -365,6 +368,7 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
+    ativo: c.ativo,
   };
 }
 
@@ -637,7 +641,12 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, onEditar, onApagar }: { clientes: Cliente[]; onEditar: (c: Cliente) => void; onApagar: (c: Cliente) => void | Promise<void> }) {
+function TabClientes({ clientes, onEditar, onApagar, onToggleAtivo }: {
+  clientes: Cliente[];
+  onEditar: (c: Cliente) => void;
+  onApagar: (c: Cliente) => void | Promise<void>;
+  onToggleAtivo: (c: Cliente) => void | Promise<void>;
+}) {
   const [search, setSearch] = useState("");
   const [qrCliente, setQrCliente] = useState<Cliente | null>(null);
   const [editCliente, setEditCliente] = useState<Cliente | null>(null);
@@ -742,6 +751,27 @@ function TabClientes({ clientes, onEditar, onApagar }: { clientes: Cliente[]; on
                     </button>
                     <button
                       className="btn-sm btn-icon"
+                      title={c.ativo ? "QR ativo — clique para desativar" : "QR desativado — clique para ativar"}
+                      aria-label={c.ativo ? "Desativar QR" : "Ativar QR"}
+                      onClick={() => onToggleAtivo(c)}
+                      style={{
+                        color: c.ativo ? "#34d399" : "#6b7280",
+                        borderColor: c.ativo ? "rgba(52,211,153,0.4)" : "rgba(107,114,128,0.4)",
+                        background: c.ativo ? "rgba(52,211,153,0.08)" : "rgba(107,114,128,0.08)",
+                      }}
+                    >
+                      {c.ativo ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18.36 6.64A9 9 0 1 1 5.64 5.64"/><line x1="12" y1="2" x2="12" y2="12"/>
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18.36 6.64A9 9 0 1 1 5.64 5.64"/><line x1="12" y1="2" x2="12" y2="12"/>
+                        </svg>
+                      )}
+                    </button>
+                    <button
+                      className="btn-sm btn-icon"
                       title="Apagar publicação"
                       aria-label="Apagar publicação"
                       onClick={() => setDelCliente(c)}
@@ -838,6 +868,7 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
       anoConclusao: form.anoConclusao,
       protocolo, url,
       pagamentoStatus: "pendente",
+      ativo: true,
     };
 
     onGerar(novo);
@@ -1115,6 +1146,15 @@ export default function Publicacao() {
     if (!error) setClientes(prev => prev.filter(x => x.pubId !== c.pubId));
   }
 
+  async function toggleAtivo(c: Cliente) {
+    const novoAtivo = !c.ativo;
+    const { error } = await supabase
+      .from("publicacoes")
+      .update({ ativo: novoAtivo })
+      .eq("pub_id", c.pubId);
+    if (!error) setClientes(prev => prev.map(x => x.pubId === c.pubId ? { ...x, ativo: novoAtivo } : x));
+  }
+
   return (
     <>
       <div className="page-header pub-page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -1151,7 +1191,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} onApagar={apagarCliente} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} />}
               {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} prefill={prefill} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
