@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useIsAdmin } from "../lib/auth";
 import "../components/Layout.css";
+import "./Pendentes.css";
 
 type StatusPag = "pendente" | "pago";
 
@@ -182,16 +183,16 @@ export default function Pendentes() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 10, padding: "12px 20px", fontSize: 13, color: "var(--fg)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", maxWidth: 360, animation: "fadeUp 0.2s ease" }}>
+        <div className="pnd-toast" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 10, padding: "12px 20px", fontSize: 13, color: "var(--fg)", boxShadow: "0 8px 32px rgba(0,0,0,0.3)", maxWidth: 360, animation: "fadeUp 0.2s ease" }}>
           ✓ {toast}
         </div>
       )}
 
       {/* Modal */}
       {modal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        <div className="pnd-backdrop" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
           onClick={e => e.target === e.currentTarget && fecharModal()}>
-          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 24px 64px rgba(0,0,0,.5)" }}>
+          <div className="pnd-sheet" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 24px 64px rgba(0,0,0,.5)" }}>
 
             {/* MARCAR PAGO */}
             {modal === "marcarPago" && alvo && (
@@ -208,7 +209,7 @@ export default function Pendentes() {
                     <input type="date" value={dataPagamento} onChange={e => setDataPagamento(e.target.value)} style={inputStyle} />
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
                   <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
                   <button onClick={confirmarPago} disabled={saving} style={{ ...btnPrimStyle, background: "#10b981" }}>{saving ? "Salvando…" : "Confirmar pago"}</button>
                 </div>
@@ -222,7 +223,7 @@ export default function Pendentes() {
                 <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
                   Reverter o pagamento de <strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> para pendente?
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
                   <button onClick={reverterPendente} disabled={saving} style={{ ...btnPrimStyle, background: "#f59e0b" }}>{saving ? "Salvando…" : "Reverter"}</button>
                 </div>
@@ -247,7 +248,7 @@ export default function Pendentes() {
                     autoFocus
                   />
                 </div>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
                   <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
                   <button onClick={salvarValor} disabled={saving} style={btnPrimStyle}>{saving ? "Salvando…" : "Salvar valor"}</button>
                 </div>
@@ -268,7 +269,7 @@ export default function Pendentes() {
                     ✕ Remover agendamento
                   </button>
                 )}
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
                   <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
                   <button onClick={salvarAgendamento} disabled={saving} style={btnPrimStyle}>{saving ? "Salvando…" : "Salvar"}</button>
                 </div>
@@ -284,7 +285,7 @@ export default function Pendentes() {
                   <strong style={{ color: "var(--fg)" }}>{alvo.nome}</strong> será removida por completo,
                   incluindo o controle de pagamento, e o QR Code dela deixará de funcionar.
                 </p>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
                   <button onClick={apagarPub} disabled={saving} style={{ ...btnPrimStyle, background: "#ef4444" }}>{saving ? "Apagando…" : "Apagar"}</button>
                 </div>
@@ -301,7 +302,7 @@ export default function Pendentes() {
       </div>
 
       {/* Métricas */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+      <div className="pnd-tiles">
         <Tile label="Aguardando pagamento" value={pendentes.length.toString()}          sub="publicações"    color="#f59e0b" />
         <Tile label="A receber"            value={`R$ ${fmt(totalPend)}`}               sub="valor pendente"  color="#f87171" />
         <Tile label="Pagamentos recebidos" value={pagos.length.toString()}              sub="publicações"    color="#34d399" />
@@ -309,31 +310,18 @@ export default function Pendentes() {
       </div>
 
       {/* Abas */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+      <div className="pnd-tabs">
         {(["pendente", "pago"] as const).map(t => (
-          <button key={t} onClick={() => setAba(t)} style={{
-            padding: "8px 20px", borderRadius: 8, border: "1px solid",
-            fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all .15s",
-            background: aba === t ? "var(--accent)" : "transparent",
-            borderColor: aba === t ? "var(--accent)" : "var(--border)",
-            color: aba === t ? "#fff" : "var(--fg-muted)",
-          }}>
+          <button key={t} onClick={() => setAba(t)} className={`pnd-tab${aba === t ? " is-active" : ""}`}>
             {t === "pendente" ? "Pendentes" : "Recebidos"}
-            <span style={{
-              marginLeft: 8, fontSize: 11, fontWeight: 700,
-              background: aba === t ? "rgba(255,255,255,0.25)" : "var(--surface-2)",
-              color: aba === t ? "#fff" : "var(--fg-muted)",
-              padding: "1px 7px", borderRadius: 20,
-            }}>
-              {t === "pendente" ? pendentes.length : pagos.length}
-            </span>
+            <span className="pnd-tab-count">{t === "pendente" ? pendentes.length : pagos.length}</span>
           </button>
         ))}
       </div>
 
-      {/* Tabela */}
-      <div className="section-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
+      {/* Lista */}
+      <div className={`section-card pnd-card${lista.length > 0 ? " pnd-card--list" : ""}`}>
+        <div className="pnd-scroll">
           {lista.length === 0 ? (
             <div className="empty-state" style={{ padding: "60px 0" }}>
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35 }}>
@@ -342,69 +330,61 @@ export default function Pendentes() {
               <p style={{ marginTop: 14 }}>{aba === "pendente" ? "Nenhum pagamento pendente." : "Nenhum pagamento recebido ainda."}</p>
             </div>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table className="pnd-table">
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                <tr>
                   {(aba === "pendente"
                     ? ["Nome", "CPF", "Protocolo", "Data", "Valor", "Agendado para", ""]
                     : ["Nome", "CPF", "Protocolo", "Data", "Valor", "Pago em", ""]
-                  ).map(h => (
-                    <th key={h} style={{ padding: "11px 16px", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", letterSpacing: ".06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
+                  ).map((h, i) => <th key={i}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {lista.map(p => {
                   const atrasado = aba === "pendente" && isAtrasado(p.agendamento_data);
+                  const iconeEditar = (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  );
                   return (
-                    <tr key={p.id} style={{ borderBottom: "1px solid var(--border)", transition: "background .12s" }}
-                      onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-
-                      <td style={{ padding: "13px 16px", fontWeight: 700, fontSize: 14, color: "var(--fg)", whiteSpace: "nowrap" }}>{p.nome}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: "monospace", fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{p.cpf}</td>
-                      <td style={{ padding: "13px 16px", fontFamily: "monospace", fontSize: 12, color: "var(--accent)", whiteSpace: "nowrap" }}>{p.protocolo || "—"}</td>
-                      <td style={{ padding: "13px 16px", fontSize: 13, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{p.data || "—"}</td>
+                    <tr key={p.id} className={`pnd-row${atrasado ? " is-late" : ""}`}>
+                      <td className="pnd-nome">{p.nome}</td>
+                      <td className="pnd-line pnd-cpf" data-label="CPF">{p.cpf}</td>
+                      <td className="pnd-line pnd-proto" data-label="Protocolo">{p.protocolo || "—"}</td>
+                      <td className="pnd-line pnd-data" data-label="Data">{p.data || "—"}</td>
 
                       {/* Valor — clicável para editar (somente admin) */}
-                      <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
+                      <td className="pnd-valor">
                         {isAdmin ? (
-                          <button
-                            onClick={() => abrirModal("editarValor", p)}
-                            title="Editar valor"
-                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 800, color: "var(--fg)", padding: 0, display: "flex", alignItems: "center", gap: 5 }}
-                          >
+                          <button className="pnd-valor-btn" onClick={() => abrirModal("editarValor", p)} title="Editar valor" aria-label="Editar valor">
                             R$ {fmt(p.valor ?? 100)}
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
+                            <span style={{ color: "var(--fg-muted)", display: "flex" }}>{iconeEditar}</span>
                           </button>
                         ) : (
-                          <span style={{ fontSize: 14, fontWeight: 800, color: "var(--fg)" }}>R$ {fmt(p.valor ?? 100)}</span>
+                          <span className="pnd-valor-txt">R$ {fmt(p.valor ?? 100)}</span>
                         )}
                       </td>
 
                       {/* Agendado / Pago em */}
-                      <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
+                      <td className="pnd-line pnd-sched" data-label={aba === "pendente" ? "Agendado para" : "Pago em"}>
                         {aba === "pendente" ? (
                           p.agendamento_data ? (
                             isAdmin ? (
-                              <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: atrasado ? "#f87171" : "#34d399", padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                              <button className="pnd-sched-btn" onClick={() => abrirModal("agendar", p)} style={{ color: atrasado ? "#f87171" : "#34d399" }}>
                                 {atrasado && <span title="Atrasado">⚠</span>}
                                 {fmtDateOnly(p.agendamento_data)}
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                {iconeEditar}
                               </button>
                             ) : (
-                              <span style={{ fontSize: 13, fontWeight: 600, color: atrasado ? "#f87171" : "#34d399", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                              <span className="pnd-sched-txt" style={{ color: atrasado ? "#f87171" : "#34d399" }}>
                                 {atrasado && <span title="Atrasado">⚠</span>}
                                 {fmtDateOnly(p.agendamento_data)}
                               </span>
                             )
                           ) : (
                             isAdmin ? (
-                              <button onClick={() => abrirModal("agendar", p)} style={{ background: "none", border: "1px dashed var(--border)", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "var(--fg-muted)", padding: "3px 10px" }}>
-                                + Agendar
-                              </button>
+                              <button className="pnd-agendar" onClick={() => abrirModal("agendar", p)}>+ Agendar</button>
                             ) : (
                               <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>—</span>
                             )
@@ -415,42 +395,22 @@ export default function Pendentes() {
                       </td>
 
                       {/* Ações (somente admin) */}
-                      <td style={{ padding: "13px 16px" }}>
+                      <td className="pnd-acoes">
                         {isAdmin ? (
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                          <div className="pnd-btns">
                             {aba === "pendente" ? (
-                              <button
-                                onClick={() => abrirModal("marcarPago", p)}
-                                style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-                              >
-                                ✓ Marcar pago
-                              </button>
+                              <button className="pnd-btn pnd-btn--pay" onClick={() => abrirModal("marcarPago", p)}>✓ Marcar pago</button>
                             ) : (
-                              <button
-                                onClick={() => abrirModal("reverter", p)}
-                                style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
-                                onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = "#f59e0b"; b.style.color = "#f59e0b"; }}
-                                onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; b.style.color = "var(--fg-muted)"; }}
-                              >
-                                Reverter
-                              </button>
+                              <button className="pnd-btn pnd-btn--rev" onClick={() => abrirModal("reverter", p)}>Reverter</button>
                             )}
-                            <button
-                              onClick={() => abrirModal("apagar", p)}
-                              title="Apagar registro"
-                              style={{ padding: "6px 9px", borderRadius: 7, border: "1px solid var(--border)", background: "transparent", color: "#f87171", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}
-                              onMouseEnter={e => { const b = e.currentTarget; b.style.borderColor = "#f87171"; }}
-                              onMouseLeave={e => { const b = e.currentTarget; b.style.borderColor = "var(--border)"; }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <button className="pnd-btn pnd-btn--del" onClick={() => abrirModal("apagar", p)} title="Apagar registro" aria-label="Apagar registro">
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
                               </svg>
                             </button>
                           </div>
                         ) : (
-                          <div style={{ textAlign: "right", fontSize: 12, color: "var(--fg-muted)" }}>
-                            {aba === "pendente" ? "Pendente" : "Pago"}
-                          </div>
+                          <div className="pnd-status-txt">{aba === "pendente" ? "Pendente" : "Pago"}</div>
                         )}
                       </td>
                     </tr>
@@ -461,10 +421,10 @@ export default function Pendentes() {
           )}
         </div>
 
-        {!loading && lista.length > 0 && (
-          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", fontSize: 12, color: "var(--fg-muted)", display: "flex", justifyContent: "space-between" }}>
+        {lista.length > 0 && (
+          <div className="pnd-foot">
             <span>{lista.length} registro{lista.length !== 1 ? "s" : ""}</span>
-            <span style={{ fontWeight: 700, color: "var(--fg)" }}>
+            <span className="pnd-foot-total">
               Total: R$ {fmt(lista.reduce((s, p) => s + (p.valor ?? 100), 0))}
             </span>
           </div>
@@ -476,10 +436,10 @@ export default function Pendentes() {
 
 function Tile({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
   return (
-    <div className="section-card" style={{ padding: "18px 20px", margin: 0 }}>
-      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1.1, marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--fg-muted)" }}>{sub}</div>
+    <div className="section-card pnd-tile">
+      <div className="pnd-tile-label">{label}</div>
+      <div className="pnd-tile-value" style={{ color }}>{value}</div>
+      <div className="pnd-tile-sub">{sub}</div>
     </div>
   );
 }
