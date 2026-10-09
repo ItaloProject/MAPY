@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
@@ -61,7 +61,32 @@ const STYLES = `
   @media (max-width: 340px) {
     .pub-card-body { padding: 12px; font-size: 14px; }
   }
+
+  .pub-root--canvas { position: fixed; inset: 0; min-height: 0; overflow: hidden; touch-action: none; }
+  .pub-wrap--canvas { position: absolute; top: 0; left: 0; width: 520px; max-width: none; min-height: 0;
+                      transform-origin: 0 0; will-change: transform; box-shadow: 0 0 0 1px var(--pub-line); }
+  .pub-zoom { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; align-items: center;
+              border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+  .pub-zoom button { min-width: 40px; height: 38px; padding: 0 10px; border: 0; background: none; color: inherit;
+                     font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+  .pub-zoom button:hover { background: rgba(127,127,127,.15); }
+  .pub-zoom .pub-zoom-pct { font-size: 13px; min-width: 62px; }
 `;
+
+const CANVAS_W = 520;
+const MIN_SCALE = 0.3;
+const MAX_SCALE = 4;
+const KEEP_VISIBLE = 80;
+
+interface View { s: number; x: number; y: number; }
+
+function isDesktopPointer(): boolean {
+  try { return window.matchMedia("(hover: hover) and (pointer: fine)").matches; } catch { return false; }
+}
+
+function initialView(): View {
+  return { s: 1, x: Math.max(0, (window.innerWidth - CANVAS_W) / 2), y: 0 };
+}
 
 function Card({ title, children, hi }: { title: string; children: React.ReactNode; hi: boolean }) {
   const border = hi ? "#ff0" : "#ddd";
@@ -108,12 +133,93 @@ export default function PubViewer() {
     return n.toLocaleDateString("pt-BR") + " " + n.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   });
 
-  useLayoutEffect(() => { setZoom(detectZoom()); }, []);
+  const [canvas] = useState(isDesktopPointer);
+  const [view, setView] = useState<View>(initialView);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => { if (!canvas) setZoom(detectZoom()); }, [canvas]);
+
+  const clampView = useCallback((v: View): View => {
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.s));
+    const w = CANVAS_W * s;
+    const h = (wrapRef.current?.offsetHeight ?? 0) * s;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    return {
+      s,
+      x: Math.min(vw - KEEP_VISIBLE, Math.max(KEEP_VISIBLE - w, v.x)),
+      y: Math.min(vh - KEEP_VISIBLE, Math.max(KEEP_VISIBLE - h, v.y)),
+    };
+  }, []);
+
+  const zoomAt = useCallback((factor: number, px: number, py: number) => {
+    setView(v => {
+      const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.s * factor));
+      const k = s / v.s;
+      return clampView({ s, x: px - (px - v.x) * k, y: py - (py - v.y) * k });
+    });
+  }, [clampView]);
+
+  const zoomCenter = useCallback((factor: number) => {
+    zoomAt(factor, window.innerWidth / 2, window.innerHeight / 2);
+  }, [zoomAt]);
+
+  const resetView = useCallback(() => setView(clampView(initialView())), [clampView]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!canvas || !root) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+      const dx = e.deltaX * unit, dy = e.deltaY * unit;
+      // Ctrl+scroll do mouse e pinça do touchpad (Chrome/Edge/Firefox) chegam como wheel com ctrlKey
+      if (e.ctrlKey || e.metaKey) {
+        zoomAt(Math.exp(-dy * 0.002), e.clientX, e.clientY);
+      } else if (e.shiftKey && dx === 0) {
+        setView(v => clampView({ ...v, x: v.x - dy }));
+      } else {
+        setView(v => clampView({ ...v, x: v.x - dx, y: v.y - dy }));
+      }
+    };
+
+    // Pinça do touchpad no Safari
+    let gestureStart = 1;
+    const onGestureStart = (e: Event) => { e.preventDefault(); gestureStart = 1; };
+    const onGestureChange = (e: Event) => {
+      e.preventDefault();
+      const ge = e as Event & { scale: number; clientX: number; clientY: number };
+      zoomAt(ge.scale / gestureStart, ge.clientX, ge.clientY);
+      gestureStart = ge.scale;
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomCenter(1.2); }
+      else if (e.key === "-") { e.preventDefault(); zoomCenter(1 / 1.2); }
+      else if (e.key === "0") { e.preventDefault(); resetView(); }
+    };
+
+    const onResize = () => setView(v => clampView(v));
+
+    root.addEventListener("wheel", onWheel, { passive: false });
+    root.addEventListener("gesturestart", onGestureStart);
+    root.addEventListener("gesturechange", onGestureChange);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      root.removeEventListener("wheel", onWheel);
+      root.removeEventListener("gesturestart", onGestureStart);
+      root.removeEventListener("gesturechange", onGestureChange);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [canvas, pub, zoomAt, zoomCenter, resetView, clampView]);
 
   useEffect(() => {
     async function load() {
-      if (!id) { setLoading(false); return; }
-      const { data } = await supabase
+      if (!id) { setLoading(false); return; }      const { data } = await supabase
         .from("publicacoes")
         .select("*")
         .eq("pub_id", id)
@@ -193,10 +299,24 @@ export default function PubViewer() {
   );
 
   return (
-    <div className="pub-root" style={vars}>
+    <div ref={rootRef} className={`pub-root${canvas ? " pub-root--canvas" : ""}`} style={vars}>
       <style>{STYLES}</style>
 
-      <div className={`pub-wrap${zoom > 1 ? " pub-wrap--z" : ""}`} style={zoom > 1 ? { zoom } : undefined}>
+      {canvas && (
+        <div className="pub-zoom" style={{ background: innerBg, color: fg, border: `1px solid ${borderClr}` }}>
+          <button onClick={() => zoomCenter(1 / 1.2)} aria-label="Diminuir zoom" title="Diminuir zoom (Ctrl −)">−</button>
+          <button className="pub-zoom-pct" onClick={resetView} title="Restaurar (Ctrl 0)">{Math.round(view.s * 100)}%</button>
+          <button onClick={() => zoomCenter(1.2)} aria-label="Aumentar zoom" title="Aumentar zoom (Ctrl +)">+</button>
+        </div>
+      )}
+
+      <div
+        ref={wrapRef}
+        className={`pub-wrap${canvas ? " pub-wrap--canvas" : zoom > 1 ? " pub-wrap--z" : ""}`}
+        style={canvas
+          ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }
+          : zoom > 1 ? { zoom } : undefined}
+      >
 
         <header className="pub-header" style={{ borderBottom: `2px solid ${hi ? "#ff0" : "#00995d"}` }}>
           <img
