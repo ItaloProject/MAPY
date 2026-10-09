@@ -133,19 +133,18 @@ export default function PubViewer() {
 
   useLayoutEffect(() => { if (!canvas) setZoom(detectZoom()); }, [canvas]);
 
-  // O topo fica preso no início da tela e o conteúdo não passa do fim;
-  // a faixa branca sempre ocupa a altura inteira da tela.
+  // O topo nunca desce além do início da tela; dá para rolar em qualquer zoom
+  // até restar só o fim do conteúdo. A faixa branca vai até o fim da tela.
   const clampView = useCallback((v: View): View => {
     const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.s));
     const w = CANVAS_W * s;
     const main = mainRef.current;
     const contentH = main ? main.offsetTop + main.offsetHeight : 0;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const h = Math.max(contentH * s, vh);
+    const vw = window.innerWidth;
     return {
       s,
       x: Math.min(vw - KEEP_VISIBLE, Math.max(KEEP_VISIBLE - w, v.x)),
-      y: Math.min(0, Math.max(vh - h, v.y)),
+      y: Math.min(0, Math.max(KEEP_VISIBLE - contentH * s, v.y)),
     };
   }, []);
 
