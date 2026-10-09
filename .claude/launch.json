@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "login-app",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite"],
+      "name": "dev",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
       "port": 5173
     }
   ]

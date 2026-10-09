@@ -225,7 +225,7 @@ export default function PubViewer() {
 
         <main className="pub-main">
           <section className="pub-intro" style={{ background: hi ? "#000" : "#f4f4f4", border: `1px solid ${borderClr}` }}>
-            <h1>Publicação processada em DOU de {pub.data}</h1>
+            <h1>Publicação processada em DOU de<br />{pub.data}</h1>
             <p>
               PROTOCOLO {pub.protocolo}<br />
               REGISTRADO DE ACORDO COM A LEI SEB 738329/2025 e SEE 98483/2025

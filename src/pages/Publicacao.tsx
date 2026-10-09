@@ -1074,7 +1074,7 @@ function TabVisualizar({ clientes }: { clientes: Cliente[] }) {
           <div className="preview-label">Pré-visualização da publicação</div>
           <div className="preview-card">
             <div className="preview-intro">
-              <strong>Publicação processada em DOU de {c.data}</strong>
+              <strong>Publicação processada em DOU de<br />{c.data}</strong>
               <p>PROTOCOLO {c.protocolo}<br />REGISTRADO DE ACORDO COM A LEI SEB 738329/2025 e SEE 98483/2025</p>
             </div>
             <PrevSection title="Dados do Aluno">
