@@ -64,14 +64,7 @@ const STYLES = `
 
   .pub-root--canvas { position: fixed; inset: 0; min-height: 0; overflow: hidden; touch-action: none; }
   .pub-wrap--canvas { position: absolute; top: 0; left: 0; width: 520px; max-width: none; min-height: 0;
-                      transform-origin: 0 0; will-change: transform; box-shadow: 0 0 0 1px var(--pub-line); }
-  .pub-zoom { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; align-items: center;
-              border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
-  .pub-zoom button { min-width: 40px; height: 38px; padding: 0 10px; border: 0; background: none; color: inherit;
-                     font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
-  .pub-zoom button:hover { background: rgba(127,127,127,.15); }
-  .pub-zoom .pub-zoom-pct { font-size: 13px; min-width: 62px; }
-`;
+                      transform-origin: 0 0; will-change: transform; box-shadow: 0 0 0 1px var(--pub-line); }`;
 
 const CANVAS_W = 520;
 const MIN_SCALE = 0.3;
@@ -136,19 +129,23 @@ export default function PubViewer() {
   const [canvas] = useState(isDesktopPointer);
   const [view, setView] = useState<View>(initialView);
   const rootRef = useRef<HTMLDivElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => { if (!canvas) setZoom(detectZoom()); }, [canvas]);
 
+  // O topo fica preso no início da tela e o conteúdo não passa do fim;
+  // a faixa branca sempre ocupa a altura inteira da tela.
   const clampView = useCallback((v: View): View => {
     const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.s));
     const w = CANVAS_W * s;
-    const h = (wrapRef.current?.offsetHeight ?? 0) * s;
+    const main = mainRef.current;
+    const contentH = main ? main.offsetTop + main.offsetHeight : 0;
     const vw = window.innerWidth, vh = window.innerHeight;
+    const h = Math.max(contentH * s, vh);
     return {
       s,
       x: Math.min(vw - KEEP_VISIBLE, Math.max(KEEP_VISIBLE - w, v.x)),
-      y: Math.min(vh - KEEP_VISIBLE, Math.max(KEEP_VISIBLE - h, v.y)),
+      y: Math.min(0, Math.max(vh - h, v.y)),
     };
   }, []);
 
@@ -302,19 +299,10 @@ export default function PubViewer() {
     <div ref={rootRef} className={`pub-root${canvas ? " pub-root--canvas" : ""}`} style={vars}>
       <style>{STYLES}</style>
 
-      {canvas && (
-        <div className="pub-zoom" style={{ background: innerBg, color: fg, border: `1px solid ${borderClr}` }}>
-          <button onClick={() => zoomCenter(1 / 1.2)} aria-label="Diminuir zoom" title="Diminuir zoom (Ctrl −)">−</button>
-          <button className="pub-zoom-pct" onClick={resetView} title="Restaurar (Ctrl 0)">{Math.round(view.s * 100)}%</button>
-          <button onClick={() => zoomCenter(1.2)} aria-label="Aumentar zoom" title="Aumentar zoom (Ctrl +)">+</button>
-        </div>
-      )}
-
       <div
-        ref={wrapRef}
         className={`pub-wrap${canvas ? " pub-wrap--canvas" : zoom > 1 ? " pub-wrap--z" : ""}`}
         style={canvas
-          ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }
+          ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, minHeight: (window.innerHeight - view.y) / view.s }
           : zoom > 1 ? { zoom } : undefined}
       >
 
@@ -343,7 +331,7 @@ export default function PubViewer() {
           </div>
         </header>
 
-        <main className="pub-main">
+        <main ref={mainRef} className="pub-main">
           <section className="pub-intro" style={{ background: hi ? "#000" : "#f4f4f4", border: `1px solid ${borderClr}` }}>
             <h1>Publicação processada em DOU de<br />{pub.data}</h1>
             <p>
