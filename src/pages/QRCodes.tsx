@@ -6,17 +6,26 @@ import { supabase } from "../lib/supabase";
 
 export default function QRCodes() {
   const navigate = useNavigate();
-  const [total,  setTotal]  = useState<number | null>(null);
-  const [ativos, setAtivos] = useState<number | null>(null);
+  const [pubTotal,  setPubTotal]  = useState<number | null>(null);
+  const [pubAtivos, setPubAtivos] = useState<number | null>(null);
+  const [estTotal,  setEstTotal]  = useState<number | null>(null);
+  const [estAtivos, setEstAtivos] = useState<number | null>(null);
 
   useEffect(() => {
     async function carregar() {
-      const [{ count: tot }, { count: atv }] = await Promise.all([
-        supabase.from("publicacoes").select("*", { count: "exact", head: true }),
-        supabase.from("publicacoes").select("*", { count: "exact", head: true }).not("url", "is", null),
+      const [
+        { count: pt }, { count: pa },
+        { count: et }, { count: ea },
+      ] = await Promise.all([
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }).eq("grupo", "publicacao"),
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }).eq("grupo", "publicacao").not("url", "is", null),
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }).eq("grupo", "estacio"),
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }).eq("grupo", "estacio").not("url", "is", null),
       ]);
-      setTotal(tot ?? 0);
-      setAtivos(atv ?? 0);
+      setPubTotal(pt ?? 0);
+      setPubAtivos(pa ?? 0);
+      setEstTotal(et ?? 0);
+      setEstAtivos(ea ?? 0);
     }
     carregar();
   }, []);
@@ -26,8 +35,8 @@ export default function QRCodes() {
       id: "publicacao",
       nome: "PUBLICAÇÃO",
       descricao: "Publicações no Diário Oficial — geração e gestão de registros",
-      total: total,
-      ativos: ativos,
+      total: pubTotal,
+      ativos: pubAtivos,
       cor: "#6366f1",
       bg: "rgba(99,102,241,0.08)",
       bordaAtiva: "rgba(99,102,241,0.4)",
@@ -38,6 +47,22 @@ export default function QRCodes() {
           <line x1="16" x2="8" y1="13" y2="13"/>
           <line x1="16" x2="8" y1="17" y2="17"/>
           <polyline points="10 9 9 9 8 9"/>
+        </svg>
+      ),
+    },
+    {
+      id: "estacio",
+      nome: "ESTÁCIO",
+      descricao: "Publicações do grupo Estácio — geração e gestão de registros",
+      total: estTotal,
+      ativos: estAtivos,
+      cor: "#10b981",
+      bg: "rgba(16,185,129,0.08)",
+      bordaAtiva: "rgba(16,185,129,0.4)",
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M7 8h10M7 12h10M7 16h6"/>
         </svg>
       ),
     },

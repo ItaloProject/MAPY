@@ -66,7 +66,7 @@ export default function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="clientes" element={<Clientes />} />
           <Route path="qrcodes" element={<QRCodes />} />
-          <Route path="qrcodes/publicacao" element={<Publicacao />} />
+          <Route path="qrcodes/:grupo" element={<Publicacao />} />
           <Route path="pendentes" element={<Pendentes />} />
           <Route path="usuarios" element={usuario === null ? null : usuario.perfil === "Administrador" ? <Usuarios /> : <Navigate to="/dashboard" replace />} />
           <Route path="configuracoes" element={<Configuracoes />} />

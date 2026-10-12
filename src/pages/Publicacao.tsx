@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation, useOutletContext } from "react-router-dom";
+import { useNavigate, useLocation, useOutletContext, useParams } from "react-router-dom";
 import type { UsuarioLogado } from "../lib/usuario";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
@@ -1122,9 +1122,17 @@ function PrevRow({ label, value }: { label: string; value: string }) {
 }
 
 /* ── Componente principal ── */
+const GRUPO_LABELS: Record<string, { titulo: string; breadcrumb: string; sub: string; novo: string }> = {
+  publicacao: { titulo: "Publicação", breadcrumb: "PUBLICAÇÃO", sub: "Geração e gestão de publicações no Diário Oficial", novo: "+ Nova publicação" },
+  estacio:    { titulo: "Estácio",    breadcrumb: "ESTÁCIO",    sub: "Publicações do grupo Estácio",                         novo: "+ Nova publicação" },
+};
+
 export default function Publicacao() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { grupo: grupoParam } = useParams<{ grupo: string }>();
+  const grupo = grupoParam ?? "publicacao";
+  const labels = GRUPO_LABELS[grupo] ?? GRUPO_LABELS["publicacao"];
   const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
   const isAdmin = usuario?.perfil === "Administrador";
   const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
@@ -1138,15 +1146,16 @@ export default function Publicacao() {
       const { data } = await supabase
         .from("publicacoes")
         .select("*")
+        .eq("grupo", grupo)
         .order("created_at", { ascending: false });
       if (data) setClientes((data as DBRow[]).map(rowToCliente));
       setDbLoading(false);
     }
     load();
-  }, []);
+  }, [grupo]);
 
   async function adicionarCliente(c: Cliente) {
-    const row = clienteToRow(c);
+    const row = { ...clienteToRow(c), grupo };
     const { data } = await supabase
       .from("publicacoes")
       .insert([row])
@@ -1198,14 +1207,14 @@ export default function Publicacao() {
           <div className="breadcrumb-path">
             <button className="breadcrumb-btn" onClick={() => navigate("/qrcodes")}>QRCodes</button>
             <span className="breadcrumb-sep">/</span>
-            <span className="breadcrumb-current">PUBLICAÇÃO</span>
+            <span className="breadcrumb-current">{labels.breadcrumb}</span>
           </div>
-          <h1 className="page-title" style={{ marginTop: 6 }}>Publicação</h1>
-          <p className="page-sub">Geração e gestão de publicações no Diário Oficial</p>
+          <h1 className="page-title" style={{ marginTop: 6 }}>{labels.titulo}</h1>
+          <p className="page-sub">{labels.sub}</p>
         </div>
         <button className="btn-primary pub-new-btn" style={{ alignSelf: "flex-end", marginBottom: 4 }}
           onClick={() => setActiveTab("novo")}>
-          + Nova publicação
+          {labels.novo}
         </button>
       </div>
 
