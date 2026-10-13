@@ -217,6 +217,11 @@ documentoXml = documentoXml.replace(
   /(<w:t>)RIBEIRÃO(<\/w:t><\/w:r><w:r><w:rPr><w:spacing w:val="-5"\/><\/w:rPr><w:t>) (<\/w:t><\/w:r><w:r><w:rPr\/><w:t>)PRETO(<\/w:t>)/,
   "$1{mantenedora_lugar}$2$3$4",
 );
+// O nome e o código de validação encostavam na faixa azul. Este espaço sobe o bloco.
+documentoXml = documentoXml.replace(
+  '<w:spacing w:before="224"/><w:rPr><w:i/></w:rPr></w:pPr></w:p><w:p><w:pPr><w:spacing w:before="1"/><w:ind w:left="6168"',
+  '<w:spacing w:before="100"/><w:rPr><w:i/></w:rPr></w:pPr></w:p><w:p><w:pPr><w:spacing w:before="1"/><w:ind w:left="6168"',
+);
 zip.file("word/document.xml", documentoXml);
 
 // O título original usa recuo suspenso medido para "DE RIBEIRÃO PRETO".
