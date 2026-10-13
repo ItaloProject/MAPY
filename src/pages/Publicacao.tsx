@@ -60,6 +60,14 @@ function dataPorExtenso(valor: string): string {
 }
 
 const PREFIXO_TECNOLOGIA = "CURSO SUPERIOR DE TECNOLOGIA EM ";
+const RECONHECIMENTO_FIXO = "Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017.";
+
+// "CENTRO UNIVERSITÁRIO ESTÁCIO DE BACABAL" → "BACABAL", no lugar de "RIBEIRÃO PRETO".
+function lugarMantenedora(instituicao: string): string {
+  const nome = instituicao.trim();
+  const marca = nome.match(/EST[AÁ]CIO\s+DE\s+(.+)$/i);
+  return (marca?.[1] || nome).trim();
+}
 
 // Frente: "CURSO SUPERIOR DE TECNOLOGIA EM GESTÃO DE TURISMO"; verso: "Curso de GESTÃO DE TURISMO".
 function nomesDoCurso(curso: string, modalidade: string): { descricao: string; nome: string } {
@@ -73,10 +81,11 @@ function dadosDoDiploma(c: Cliente): Record<string, string> {
   const curso = nomesDoCurso(c.curso, c.modalidade);
   return {
     instituicao: c.instituicao,
+    mantenedora_lugar: lugarMantenedora(c.instituicao),
     reitor: c.reitor,
     curso_descricao: curso.descricao,
     curso_nome: curso.nome,
-    curso_reconhecimento: c.cursoReconhecimento,
+    curso_reconhecimento: RECONHECIMENTO_FIXO,
     modalidade: c.modalidade.replace(/\s*\(A\)$/i, " (A)"),
     data: c.data,
     data_colacao: c.dataColacao,
@@ -863,7 +872,6 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
                 <div className="edit-grid">
                   <Field label="Nome da Instituição" value={form.instituicao} onChange={sf("instituicao", up)} full />
                   <Field label="Reitor(a)" value={form.reitor} onChange={sf("reitor", up)} full />
-                  <Field label="Código INEP" value={form.inep} onChange={sf("inep")} />
                   <Field label="Endereço" value={form.endereco} onChange={sf("endereco", up)} />
                   <Field label="Bairro" value={form.bairro} onChange={sf("bairro", up)} />
                   <AutocompleteMunicipio
@@ -892,7 +900,6 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
                 <div className="edit-section-title">Resumo da Publicação</div>
                 <div className="edit-grid">
                   <Field label="Curso" value={form.curso} onChange={sf("curso", up)} full />
-                  {estacio && <Field label="Reconhecimento do Curso" value={form.cursoReconhecimento} onChange={sf("cursoReconhecimento")} placeholder="Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017." full />}
                   <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={sf("anoConclusao")} />
                   <Field label="Data de Conclusão do Curso" value={form.data} onChange={sf("data", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={sf("dataColacao", maskData)} placeholder="DD/MM/AAAA" />
@@ -1140,7 +1147,7 @@ const formVazioEstacio: typeof formVazio = {
 
 const CAMPOS_DIPLOMA: [keyof typeof formVazio, string][] = [
   ["instituicao", "Nome da Instituição"], ["reitor", "Reitor(a)"], ["curso", "Curso"],
-  ["cursoReconhecimento", "Reconhecimento do Curso"], ["dataPublicacao", "Data de Conclusão"],
+  ["dataPublicacao", "Data de Conclusão"],
   ["dataColacao", "Data da Colação"], ["naturalidade", "Naturalidade"], ["nascimento", "Data de Nascimento"],
   ["rg", "RG"], ["orgaoExpedidor", "Órgão Expedidor"], ["cidadeExpedicao", "Cidade/UF da Expedição"],
   ["dataExpedicao", "Data de Expedição"], ["registroNumero", "Nº do Registro"], ["registroLivro", "Livro"],
@@ -1215,13 +1222,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
   async function gerarDiploma(c: Cliente): Promise<Cliente | null> {
     try {
-      const { blob, docxUrl } = await publicarDocxEstacio(c);
+      const { blob, docxUrl } = await publicarDocxEstacio({ ...c, cursoReconhecimento: RECONHECIMENTO_FIXO });
       setDocxBlob(blob);
       if (!docxUrl) {
         setErro("Diploma gerado, mas o envio do .docx falhou. Salve novamente para publicar.");
         return null;
       }
-      return { ...c, docxUrl };
+      return { ...c, cursoReconhecimento: RECONHECIMENTO_FIXO, docxUrl };
     } catch (e) {
       console.error("[diploma]", e);
       setErro("Não foi possível gerar o diploma (.docx). Verifique os dados e tente novamente.");
@@ -1430,7 +1437,6 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <div className="edit-grid">
             <Field label="Nome da Instituição" value={form.instituicao} onChange={setField("instituicao", up)} full />
             {isEstacio && <Field label="Reitor(a)" value={form.reitor} onChange={setField("reitor", up)} placeholder="Nome do(a) Reitor(a)" full />}
-            <Field label="Código INEP" value={form.inep} onChange={setField("inep")} />
             <Field label="Endereço" value={form.endereco} onChange={setField("endereco", up)} />
             <Field label="Bairro" value={form.bairro} onChange={setField("bairro", up)} />
             <AutocompleteMunicipio
@@ -1456,7 +1462,6 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <div className="edit-grid">
             <Field label="Curso" value={form.curso} onChange={setField("curso", up)} full
               placeholder={isEstacio ? "GESTÃO DE TURISMO (o prefixo do curso é montado pelo título)" : undefined} />
-            {isEstacio && <Field label="Reconhecimento do Curso" value={form.cursoReconhecimento} onChange={setField("cursoReconhecimento")} placeholder="Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017." full />}
             {isEstacio && (
               <div className="field-group">
                 <label className="edit-label">Título/Grau Conferido</label>
@@ -1577,7 +1582,6 @@ function TabVisualizar({ clientes }: { clientes: Cliente[] }) {
             </PrevSection>
             <PrevSection title="Dados da Instituição">
               <PrevRow label="Nome da Instituição" value={c.instituicao} />
-              <PrevRow label="Código do INEP" value={c.inep} />
               <PrevRow label="Município" value={c.municipio} />
               <PrevRow label="Modalidades" value={c.modalidade} />
             </PrevSection>

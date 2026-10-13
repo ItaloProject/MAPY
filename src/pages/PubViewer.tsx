@@ -351,7 +351,6 @@ export default function PubViewer() {
 
           <Card title="Dados da Instituição" hi={hi}>
             <Row label="Nome da Instituição" value={pub.instituicao} hi={hi} />
-            <Row label="Código do INEP"      value={pub.inep}        hi={hi} />
             <Row label="Endereço"            value={pub.endereco}    hi={hi} />
             <Row label="Bairro"              value={pub.bairro}      hi={hi} />
             <Row label="Município"           value={pub.municipio}   hi={hi} />

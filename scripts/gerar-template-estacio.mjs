@@ -212,7 +212,23 @@ if (faltando.length) {
   console.error("Regras sem parágrafo correspondente:", faltando.join(", "));
   process.exit(1);
 }
-zip.file("word/document.xml", new XMLSerializer().serializeToString(doc));
+let documentoXml = new XMLSerializer().serializeToString(doc);
+documentoXml = documentoXml.replace(
+  /(<w:t>)RIBEIRÃO(<\/w:t><\/w:r><w:r><w:rPr><w:spacing w:val="-5"\/><\/w:rPr><w:t>) (<\/w:t><\/w:r><w:r><w:rPr\/><w:t>)PRETO(<\/w:t>)/,
+  "$1{mantenedora_lugar}$2$3$4",
+);
+zip.file("word/document.xml", documentoXml);
+
+// O título original usa recuo suspenso medido para "DE RIBEIRÃO PRETO".
+// Sem centralizar, a segunda linha de outro nome (ex.: "DE BACABAL") fica à esquerda.
+const stylesPath = "word/styles.xml";
+const stylesXml = zip.file(stylesPath)?.asText();
+if (stylesXml) {
+  zip.file(stylesPath, stylesXml.replace(
+    /(<w:style w:styleId="Heading1"[\s\S]*?<w:pPr>)[\s\S]*?(<\/w:pPr>)/,
+    '$1<w:spacing w:before="66"/><w:ind w:left="4372" w:right="4372"/><w:jc w:val="center"/><w:outlineLvl w:val="1"/>$2',
+  ));
+}
 
 // O QR do verso passa a ter caminho fixo para o painel substituí-lo na geração.
 const relsPath = "word/_rels/document.xml.rels";
