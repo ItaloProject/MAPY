@@ -392,7 +392,8 @@ interface Cliente {
   id: number;
   pubId: string;
   nome: string; cpf: string; curso: string; status: string; data: string;
-  nascimento: string; rg: string; nomeMae: string; nomePai: string; observacao: string;
+  nascimento: string; rg: string; orgaoExpedidor: string; nomeMae: string; nomePai: string; observacao: string;
+  nacionalidade: string; dataColacao: string; reitor: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
   protocolo: string; url: string;
@@ -402,7 +403,8 @@ interface Cliente {
 
 type DBRow = {
   id: number; pub_id: string; nome: string; cpf: string; curso: string; status: string; data: string;
-  nascimento: string; rg: string; nome_mae: string; nome_pai: string; observacao: string;
+  nascimento: string; rg: string; orgao_expedidor?: string; nome_mae: string; nome_pai: string; observacao: string;
+  nacionalidade?: string; data_colacao?: string; reitor?: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
   pagamento_status?: "pendente" | "pago";
@@ -414,7 +416,11 @@ function rowToCliente(r: DBRow): Cliente {
   return {
     id: r.id, pubId: r.pub_id, nome: r.nome, cpf: r.cpf, curso: r.curso,
     status: r.status, data: r.data, nascimento: r.nascimento, rg: r.rg,
+    orgaoExpedidor: r.orgao_expedidor ?? "",
     nomeMae: r.nome_mae, nomePai: r.nome_pai, observacao: r.observacao,
+    nacionalidade: r.nacionalidade ?? "",
+    dataColacao: r.data_colacao ?? "",
+    reitor: r.reitor ?? "",
     instituicao: r.instituicao, inep: r.inep, endereco: r.endereco, bairro: r.bairro,
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
@@ -427,12 +433,14 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
   return {
     pub_id: c.pubId, nome: c.nome, cpf: c.cpf, curso: c.curso,
     status: c.status, data: c.data, nascimento: c.nascimento, rg: c.rg,
+    orgao_expedidor: c.orgaoExpedidor || undefined,
     nome_mae: c.nomeMae, nome_pai: c.nomePai, observacao: c.observacao,
+    nacionalidade: c.nacionalidade || undefined,
+    data_colacao: c.dataColacao || undefined,
+    reitor: c.reitor || undefined,
     instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
-    // ativo e created_by são omitidos do insert: o banco usa default (true / null)
-    // após aplicar as migrations 011 e 012 no Supabase, os toggles passam a funcionar
   };
 }
 
@@ -574,9 +582,13 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
     nascimento: cliente.nascimento,
     cpf: cliente.cpf,
     rg: cliente.rg,
+    orgaoExpedidor: cliente.orgaoExpedidor,
     nomeMae: cliente.nomeMae,
     nomePai: cliente.nomePai,
     observacao: cliente.observacao,
+    nacionalidade: cliente.nacionalidade,
+    dataColacao: cliente.dataColacao,
+    reitor: cliente.reitor,
     instituicao: cliente.instituicao,
     inep: cliente.inep,
     endereco: cliente.endereco,
@@ -612,9 +624,13 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
       nascimento: form.nascimento,
       cpf: form.cpf,
       rg: form.rg,
+      orgaoExpedidor: form.orgaoExpedidor,
       nomeMae: form.nomeMae,
       nomePai: form.nomePai,
       observacao: form.observacao,
+      nacionalidade: form.nacionalidade,
+      dataColacao: form.dataColacao,
+      reitor: form.reitor,
       instituicao: form.instituicao,
       inep: form.inep,
       endereco: form.endereco,
@@ -655,6 +671,8 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                   <Field label="Data de Nascimento" value={form.nascimento} onChange={sf("nascimento", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="CPF *" value={form.cpf} onChange={sf("cpf", maskCPF)} placeholder="000.000.000-00" />
                   <Field label="RG/RNE/RA" value={form.rg} onChange={sf("rg", maskRG)} placeholder="000000000000-0" />
+                  <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={sf("orgaoExpedidor", up)} placeholder="SSP/SP" />
+                  <Field label="Nacionalidade" value={form.nacionalidade} onChange={sf("nacionalidade", up)} placeholder="BRASILEIRO(A)" />
                   <Field label="Nome da Mãe" value={form.nomeMae} onChange={sf("nomeMae", up)} />
                   <Field label="Nome do Pai" value={form.nomePai} onChange={sf("nomePai", up)} />
                   <Field label="Observações" value={form.observacao} onChange={sf("observacao", up)} full />
@@ -664,6 +682,7 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                 <div className="edit-section-title">Dados da Instituição</div>
                 <div className="edit-grid">
                   <Field label="Nome da Instituição" value={form.instituicao} onChange={sf("instituicao", up)} full />
+                  <Field label="Reitor(a)" value={form.reitor} onChange={sf("reitor", up)} full />
                   <Field label="Código INEP" value={form.inep} onChange={sf("inep")} />
                   <Field label="Endereço" value={form.endereco} onChange={sf("endereco", up)} />
                   <Field label="Bairro" value={form.bairro} onChange={sf("bairro", up)} />
@@ -674,8 +693,14 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                   />
                   <Field label="CEP" value={form.cep} onChange={sf("cep", maskCEP)} placeholder="00000-000" />
                   <div className="field-group">
-                    <label className="edit-label">Modalidade</label>
+                    <label className="edit-label">Modalidade / Título</label>
                     <select className="edit-input" value={form.modalidade} onChange={sf("modalidade")}>
+                      <option>BACHAREL</option>
+                      <option>LICENCIADO(A)</option>
+                      <option>TECNÓLOGO(A)</option>
+                      <option>ESPECIALISTA</option>
+                      <option>MESTRE</option>
+                      <option>DOUTOR(A)</option>
                       <option>PRESENCIAL</option>
                       <option>SEMIPRESENCIAL</option>
                       <option>EAD</option>
@@ -688,7 +713,8 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                 <div className="edit-grid">
                   <Field label="Curso" value={form.curso} onChange={sf("curso", up)} full />
                   <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={sf("anoConclusao")} />
-                  <Field label="Data de Publicação" value={form.data} onChange={sf("data")} placeholder="DD/MM/AAAA" />
+                  <Field label="Data de Conclusão do Curso" value={form.data} onChange={sf("data")} placeholder="DD/MM/AAAA" />
+                  <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={sf("dataColacao", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="Protocolo" value={form.protocolo} onChange={sf("protocolo")} full />
                 </div>
               </div>
@@ -908,19 +934,24 @@ function QRCapture({ pubId, url }: { pubId: string; url: string }) {
 
 /* ── Tab NOVO ── */
 const formVazio = {
-  nome: "", nascimento: "", cpf: "", rg: "",
+  nome: "", nascimento: "", cpf: "", rg: "", orgaoExpedidor: "",
   nomeMae: "", nomePai: "", observacao: "",
+  nacionalidade: "BRASILEIRO(A)", dataColacao: "", reitor: "",
   instituicao: "", inep: "", endereco: "", bairro: "", municipio: "", cep: "",
-  modalidade: "PRESENCIAL", curso: "", anoConclusao: "2026", dataPublicacao: "",
+  modalidade: "BACHAREL", curso: "", anoConclusao: "2026", dataPublicacao: "",
   protocolo: "",
 };
 
 function formDeCliente(c: Cliente): typeof formVazio {
   return {
     nome: c.nome, nascimento: c.nascimento, cpf: c.cpf, rg: c.rg,
+    orgaoExpedidor: c.orgaoExpedidor,
     nomeMae: c.nomeMae, nomePai: c.nomePai, observacao: c.observacao,
+    nacionalidade: c.nacionalidade || "BRASILEIRO(A)",
+    dataColacao: c.dataColacao,
+    reitor: c.reitor,
     instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
-    municipio: c.municipio, cep: c.cep, modalidade: c.modalidade || "PRESENCIAL",
+    municipio: c.municipio, cep: c.cep, modalidade: c.modalidade || "BACHAREL",
     curso: c.curso, anoConclusao: c.anoConclusao, dataPublicacao: c.data,
     protocolo: c.protocolo,
   };
@@ -995,8 +1026,12 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       nascimento: cliente.nascimento,
       municipio: cliente.municipio,
       rg: cliente.rg,
+      orgao_expedidor: cliente.orgaoExpedidor,
       nome_mae: cliente.nomeMae,
       nome_pai: cliente.nomePai,
+      nacionalidade: cliente.nacionalidade,
+      data_colacao: cliente.dataColacao,
+      reitor: cliente.reitor,
       curso: cliente.curso,
       modalidade: cliente.modalidade,
       ano_conclusao: cliente.anoConclusao,
@@ -1021,7 +1056,11 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       const atualizado: Cliente = {
         ...editando,
         nome: form.nome, cpf: form.cpf, nascimento: form.nascimento, rg: form.rg,
+        orgaoExpedidor: form.orgaoExpedidor,
         nomeMae: form.nomeMae, nomePai: form.nomePai, observacao: form.observacao,
+        nacionalidade: form.nacionalidade,
+        dataColacao: form.dataColacao,
+        reitor: form.reitor,
         instituicao: form.instituicao, inep: form.inep, endereco: form.endereco,
         bairro: form.bairro, municipio: form.municipio, cep: form.cep,
         modalidade: form.modalidade, curso: form.curso, anoConclusao: form.anoConclusao,
@@ -1058,8 +1097,12 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       curso: form.curso, status: "Publicado",
       data: dataDisplay,
       nascimento: form.nascimento, rg: form.rg,
+      orgaoExpedidor: form.orgaoExpedidor,
       nomeMae: form.nomeMae, nomePai: form.nomePai,
       observacao: form.observacao || "ALUNO APROVADO",
+      nacionalidade: form.nacionalidade,
+      dataColacao: form.dataColacao,
+      reitor: form.reitor,
       instituicao: form.instituicao, inep: form.inep,
       endereco: form.endereco, bairro: form.bairro,
       municipio: form.municipio, cep: form.cep,
@@ -1206,6 +1249,8 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             <Field label="Data de Nascimento" value={form.nascimento} onChange={setField("nascimento", maskData)} placeholder="DD/MM/AAAA" />
             <Field label="CPF *" value={form.cpf} onChange={setField("cpf", maskCPF)} placeholder="000.000.000-00" />
             <Field label="RG/RNE/RA" value={form.rg} onChange={setField("rg", maskRG)} placeholder="000000000000-0" />
+            {isEstacio && <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={setField("orgaoExpedidor", up)} placeholder="SSP/SP" />}
+            {isEstacio && <Field label="Nacionalidade" value={form.nacionalidade} onChange={setField("nacionalidade", up)} placeholder="BRASILEIRO(A)" />}
             <Field label="Nome da Mãe" value={form.nomeMae} onChange={setField("nomeMae", up)} />
             <Field label="Nome do Pai" value={form.nomePai} onChange={setField("nomePai", up)} />
             <Field label="Observações" value={form.observacao} onChange={setField("observacao", up)} full />
@@ -1215,6 +1260,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <div className="edit-section-title">Dados da Instituição</div>
           <div className="edit-grid">
             <Field label="Nome da Instituição" value={form.instituicao} onChange={setField("instituicao", up)} full />
+            {isEstacio && <Field label="Reitor(a)" value={form.reitor} onChange={setField("reitor", up)} placeholder="Nome do(a) Reitor(a)" full />}
             <Field label="Código INEP" value={form.inep} onChange={setField("inep")} />
             <Field label="Endereço" value={form.endereco} onChange={setField("endereco", up)} />
             <Field label="Bairro" value={form.bairro} onChange={setField("bairro", up)} />
@@ -1224,22 +1270,38 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
               onSelectSuggestion={(municipio, cep) => setForm(prev => ({ ...prev, municipio, cep }))}
             />
             <Field label="CEP" value={form.cep} onChange={setField("cep", maskCEP)} placeholder="00000-000" />
-            <div className="field-group">
-              <label className="edit-label">Modalidade</label>
-              <select className="edit-input" value={form.modalidade} onChange={setField("modalidade")}>
-                <option>PRESENCIAL</option>
-                <option>SEMIPRESENCIAL</option>
-                <option>EAD</option>
-              </select>
-            </div>
+            {!isEstacio && (
+              <div className="field-group">
+                <label className="edit-label">Modalidade</label>
+                <select className="edit-input" value={form.modalidade} onChange={setField("modalidade")}>
+                  <option>PRESENCIAL</option>
+                  <option>SEMIPRESENCIAL</option>
+                  <option>EAD</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
         <div className="edit-section">
           <div className="edit-section-title">Resumo da Publicação</div>
           <div className="edit-grid">
             <Field label="Curso" value={form.curso} onChange={setField("curso", up)} full />
+            {isEstacio && (
+              <div className="field-group">
+                <label className="edit-label">Título/Grau Conferido</label>
+                <select className="edit-input" value={form.modalidade} onChange={setField("modalidade")}>
+                  <option>BACHAREL</option>
+                  <option>LICENCIADO(A)</option>
+                  <option>TECNÓLOGO(A)</option>
+                  <option>ESPECIALISTA</option>
+                  <option>MESTRE</option>
+                  <option>DOUTOR(A)</option>
+                </select>
+              </div>
+            )}
             <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={setField("anoConclusao")} />
-            <Field label="Data de Publicação" value={form.dataPublicacao} onChange={setField("dataPublicacao", maskData)} placeholder="DD/MM/AAAA" />
+            <Field label="Data de Conclusão do Curso" value={form.dataPublicacao} onChange={setField("dataPublicacao", maskData)} placeholder="DD/MM/AAAA" />
+            {isEstacio && <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={setField("dataColacao", maskData)} placeholder="DD/MM/AAAA" />}
             <Field label="Protocolo" value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
           </div>
         </div>
