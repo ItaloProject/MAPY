@@ -2602,7 +2602,8 @@ export default function Publicacao() {
   }, [grupo]);
 
   async function adicionarCliente(c: Cliente) {
-    const row = { ...clienteToRow(c), grupo };
+    const { data: { user } } = await supabase.auth.getUser();
+    const row = { ...clienteToRow(c), grupo, created_by: user?.id ?? null };
     const { data } = await supabase
       .from("publicacoes")
       .insert([row])
