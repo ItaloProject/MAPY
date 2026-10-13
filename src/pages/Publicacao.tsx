@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation, useOutletContext, useParams } from "react-router-dom";
+import { useNavigate, useLocation, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import type { UsuarioLogado } from "../lib/usuario";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
@@ -644,9 +644,10 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, isAdmin, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
+function TabClientes({ clientes, isAdmin, onNovo, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
   clientes: Cliente[];
   isAdmin: boolean;
+  onNovo: () => void;
   onEditar: (c: Cliente) => void;
   onApagar: (c: Cliente) => void | Promise<void>;
   onToggleAtivo: (c: Cliente) => void | Promise<void>;
@@ -718,7 +719,7 @@ function TabClientes({ clientes, isAdmin, onEditar, onApagar, onToggleAtivo, onT
       <div className="tab-toolbar">
         <input className="search-input" placeholder="Buscar por nome ou CPF…"
           value={search} onChange={e => setSearch(e.target.value)} />
-        <button className="btn-primary pub-add-desktop">+ Adicionar cliente</button>
+        <button className="btn-primary pub-add-desktop" onClick={onNovo}>+ Adicionar cliente</button>
       </div>
 
       {isAdmin && selected.size > 0 && (
@@ -853,13 +854,46 @@ const formVazio = {
   protocolo: "",
 };
 
-function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?: { nome?: string; cpf?: string } | null }) {
+function formDeCliente(c: Cliente): typeof formVazio {
+  return {
+    nome: c.nome, nascimento: c.nascimento, cpf: c.cpf, rg: c.rg,
+    nomeMae: c.nomeMae, nomePai: c.nomePai, observacao: c.observacao,
+    instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
+    municipio: c.municipio, cep: c.cep, modalidade: c.modalidade || "PRESENCIAL",
+    curso: c.curso, anoConclusao: c.anoConclusao, dataPublicacao: c.data,
+    protocolo: c.protocolo,
+  };
+}
+
+function TabNovo({ clientes, onGerar, onEditar, prefill }: {
+  clientes: Cliente[];
+  onGerar: (c: Cliente) => void;
+  onEditar: (c: Cliente) => Promise<boolean>;
+  prefill?: { nome?: string; cpf?: string } | null;
+}) {
   const [form, setForm] = useState({
     ...formVazio,
     nome: prefill?.nome ?? "",
     cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "",
   });
   const [gerado, setGerado] = useState<Cliente | null>(null);
+  const [editando, setEditando] = useState<Cliente | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  function selecionarEdicao(pubId: string) {
+    const c = clientes.find(x => x.pubId === pubId) ?? null;
+    setEditando(c);
+    setErro("");
+    setForm(c ? formDeCliente(c) : formVazio);
+  }
+
+  function cancelarEdicao() {
+    setEditando(null);
+    setErro("");
+    setForm(formVazio);
+  }
+
   function setField(k: keyof typeof form, transform?: (v: string) => string) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       let v = e.target.value;
@@ -868,9 +902,29 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
     };
   }
 
-  function gerar(e: React.FormEvent) {
+  async function gerar(e: React.FormEvent) {
     e.preventDefault();
     if (!form.nome || !form.cpf) return;
+
+    if (editando) {
+      const atualizado: Cliente = {
+        ...editando,
+        nome: form.nome, cpf: form.cpf, nascimento: form.nascimento, rg: form.rg,
+        nomeMae: form.nomeMae, nomePai: form.nomePai, observacao: form.observacao,
+        instituicao: form.instituicao, inep: form.inep, endereco: form.endereco,
+        bairro: form.bairro, municipio: form.municipio, cep: form.cep,
+        modalidade: form.modalidade, curso: form.curso, anoConclusao: form.anoConclusao,
+        data: form.dataPublicacao || editando.data,
+        protocolo: form.protocolo || editando.protocolo,
+      };
+      setSalvando(true);
+      setErro("");
+      const ok = await onEditar(atualizado);
+      setSalvando(false);
+      if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
+      setGerado(atualizado);
+      return;
+    }
 
     // ID curto (10 hex chars) → URL menor → QR mais simples e legível
     const bytes = crypto.getRandomValues(new Uint8Array(5));
@@ -907,6 +961,8 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
   function novaPublicacao() {
     setForm(formVazio);
     setGerado(null);
+    setEditando(null);
+    setErro("");
   }
 
   if (gerado) return (
@@ -921,7 +977,9 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
           </svg>
         </div>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>Publicação gerada!</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>
+            {editando ? "Alterações salvas!" : "Publicação gerada!"}
+          </div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
         </div>
 
@@ -948,6 +1006,20 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
   return (
     <form className="tab-body" onSubmit={gerar}>
       <div className="edit-sections">
+        {clientes.length > 0 && (
+          <div className="edit-section">
+            <div className="edit-section-title">Editar publicação existente</div>
+            <div className="edit-grid">
+              <div className="field-group field-group--full">
+                <label className="edit-label">Selecione uma publicação para editar ou deixe em branco para criar uma nova</label>
+                <select className="edit-input" value={editando?.pubId ?? ""} onChange={e => selecionarEdicao(e.target.value)}>
+                  <option value="">— Nova publicação —</option>
+                  {clientes.map(c => <option key={c.pubId} value={c.pubId}>{c.nome} — {c.cpf}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="edit-section">
           <div className="edit-section-title">Dados do Aluno</div>
           <div className="edit-grid">
@@ -994,10 +1066,14 @@ function TabNovo({ onGerar, prefill }: { onGerar: (c: Cliente) => void; prefill?
         </div>
       </div>
       <div className="edit-footer">
-        <span />
+        {erro ? <span style={{ color: "#f87171", fontSize: 13 }}>{erro}</span> : <span />}
         <div className="edit-actions">
-          <button type="button" className="btn-sm" onClick={() => setForm(formVazio)}>Limpar</button>
-          <button type="submit" className="btn-primary">Gerar Publicação</button>
+          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => setForm(formVazio)}>
+            {editando ? "Cancelar edição" : "Limpar"}
+          </button>
+          <button type="submit" className="btn-primary" disabled={salvando}>
+            {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Gerar Publicação"}
+          </button>
         </div>
       </div>
     </form>
@@ -1136,7 +1212,10 @@ export default function Publicacao() {
   const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
   const isAdmin = usuario?.perfil === "Administrador";
   const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
-  const [activeTab, setActiveTab] = useState<Tab>(prefill || new URLSearchParams(location.search).get("aba") === "novo" ? "novo" : "clientes");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaUrl = searchParams.get("aba");
+  const activeTab: Tab = tabs.some(t => t.id === abaUrl) ? (abaUrl as Tab) : (prefill ? "novo" : "clientes");
+  const setActiveTab = (t: Tab) => setSearchParams({ aba: t });
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
 
@@ -1167,7 +1246,7 @@ export default function Publicacao() {
     }
   }
 
-  async function editarCliente(atualizado: Cliente) {
+  async function editarCliente(atualizado: Cliente): Promise<boolean> {
     const row = clienteToRow(atualizado);
     const { data } = await supabase
       .from("publicacoes")
@@ -1175,7 +1254,9 @@ export default function Publicacao() {
       .eq("pub_id", atualizado.pubId)
       .select()
       .single();
-    if (data) setClientes(prev => prev.map(c => c.pubId === atualizado.pubId ? rowToCliente(data as DBRow) : c));
+    if (!data) return false;
+    setClientes(prev => prev.map(c => c.pubId === atualizado.pubId ? rowToCliente(data as DBRow) : c));
+    return true;
   }
 
   async function apagarCliente(c: Cliente) {
@@ -1236,8 +1317,8 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
-              {activeTab === "novo"       && <TabNovo onGerar={c => { adicionarCliente(c); }} prefill={prefill} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} onNovo={() => setActiveTab("novo")} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
+              {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
             </>
