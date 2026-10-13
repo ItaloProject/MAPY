@@ -31,19 +31,28 @@ function carregarTemplateStorage(): ArrayBuffer | null {
   } catch { return null; }
 }
 
+const STORAGE_BUCKET = "diplomas";
+
 async function uploadDocxStorage(blob: Blob, pubId: string): Promise<string | null> {
   try {
     const path = `estacio/${pubId}.docx`;
     const { error } = await supabase.storage
-      .from("diplomas")
+      .from(STORAGE_BUCKET)
       .upload(path, blob, {
         contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         upsert: true,
       });
-    if (error) return null;
-    const { data } = supabase.storage.from("diplomas").getPublicUrl(path);
+    if (error) {
+      console.error("[docx upload]", error.message, error);
+      return null;
+    }
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+    console.log("[docx upload] ok →", data.publicUrl);
     return data.publicUrl;
-  } catch { return null; }
+  } catch (e) {
+    console.error("[docx upload] catch", e);
+    return null;
+  }
 }
 
 async function gerarDocxPreenchido(template: ArrayBuffer, dados: Record<string, string>): Promise<Blob> {
