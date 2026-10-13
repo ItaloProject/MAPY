@@ -484,13 +484,37 @@ function AutocompleteMunicipio({ value, onChange, onSelectSuggestion }: {
 }) {
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const filtered = value.length >= 2
     ? MUNICIPIOS_MA.filter(m => m.nome.includes(value.toUpperCase())).slice(0, 8)
     : [];
 
   useEffect(() => { setActiveIdx(0); }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const altura = Math.min(220, Math.max(filtered.length, 1) * 40);
+      const espacoAbaixo = window.innerHeight - r.bottom;
+      const acima = espacoAbaixo < altura + 12 && r.top > espacoAbaixo;
+      setMenuStyle(acima
+        ? { position: "fixed", left: r.left, width: r.width, bottom: window.innerHeight - r.top + 4, zIndex: 4000 }
+        : { position: "fixed", left: r.left, width: r.width, top: r.bottom + 4, zIndex: 4000 });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, filtered.length, value]);
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -512,6 +536,7 @@ function AutocompleteMunicipio({ value, onChange, onSelectSuggestion }: {
     <div className="field-group" ref={containerRef} style={{ position: "relative" }}>
       <label className="edit-label">Município</label>
       <input
+        ref={inputRef}
         className="edit-input"
         value={value}
         onChange={e => { onChange(e); setOpen(true); }}
@@ -522,7 +547,7 @@ function AutocompleteMunicipio({ value, onChange, onSelectSuggestion }: {
       />
       {open && filtered.length > 0 && (
         <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
+          ...menuStyle,
           background: "var(--surface)", border: "1px solid var(--border)",
           borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.4)",
           maxHeight: 220, overflowY: "auto",
@@ -1463,11 +1488,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 }) {
   const isEstacio = grupo === "estacio";
   const vazio = isEstacio ? formVazioEstacio : formVazio;
-  const [form, setForm] = useState({
-    ...vazio,
-    nome: prefill?.nome ?? "",
-    cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "",
-  });
+  const rascunhoKey = `pub-rascunho-${grupo ?? "publicacao"}`;
+  const rascunhoInicial = useRef<{ form?: typeof formVazio; senhaAcesso?: string; editandoId?: string } | null | undefined>(undefined);
+  if (rascunhoInicial.current === undefined) {
+    try {
+      const raw = sessionStorage.getItem(rascunhoKey);
+      rascunhoInicial.current = raw ? JSON.parse(raw) : null;
+    } catch { rascunhoInicial.current = null; }
+  }
+  const rascunho = rascunhoInicial.current;
+  const [form, setForm] = useState(() => rascunho?.form
+    ? { ...vazio, ...rascunho.form }
+    : { ...vazio, nome: prefill?.nome ?? "", cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "" });
   const [gerado, setGerado] = useState<Cliente | null>(null);
   const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
   const [templateStatus, setTemplateStatus] = useState<"carregando" | "ok" | "erro">("carregando");
@@ -1475,7 +1507,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [matricula, setMatricula] = useState("");
-  const [senhaAcesso, setSenhaAcesso] = useState("");
+  const [senhaAcesso, setSenhaAcesso] = useState(rascunho?.senhaAcesso ?? "");
   const [acessoCriado, setAcessoCriado] = useState<{ matricula: string; senha: string } | null>(null);
 
   useEffect(() => {
@@ -1483,6 +1515,27 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     localStorage.removeItem(TEMPLATE_KEY_LEGADO);
     carregarTemplateEstacio().then(() => setTemplateStatus("ok"), () => setTemplateStatus("erro"));
   }, [isEstacio]);
+
+  const editandoRestaurado = useRef(false);
+  useEffect(() => {
+    if (editandoRestaurado.current) return;
+    const id = rascunho?.editandoId;
+    if (!id) { editandoRestaurado.current = true; return; }
+    const c = clientes.find(x => x.pubId === id);
+    if (!c) return;
+    setEditando(c);
+    editandoRestaurado.current = true;
+  }, [clientes, rascunho]);
+
+  useEffect(() => {
+    if (gerado) {
+      sessionStorage.removeItem(rascunhoKey);
+      return;
+    }
+    sessionStorage.setItem(rascunhoKey, JSON.stringify({
+      form, senhaAcesso, editandoId: editando?.pubId ?? "",
+    }));
+  }, [form, senhaAcesso, editando, gerado, rascunhoKey]);
 
   function carregarAcesso(id: string) {
     const acesso = lerAcessos().find(a => a.pubId === id);
@@ -1505,6 +1558,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setForm(vazio);
     setMatricula("");
     setSenhaAcesso("");
+    sessionStorage.removeItem(rascunhoKey);
   }
 
   function confirmarCamposDiploma(): boolean {
@@ -1664,6 +1718,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setMatricula("");
     setSenhaAcesso("");
     setAcessoCriado(null);
+    sessionStorage.removeItem(rascunhoKey);
   }
 
   if (gerado) return (
@@ -1844,7 +1899,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       <div className="edit-footer">
         {erro ? <span style={{ color: "#f87171", fontSize: 13 }}>{erro}</span> : <span />}
         <div className="edit-actions">
-          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => setForm(vazio)}>
+          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => { setForm(vazio); setSenhaAcesso(""); sessionStorage.removeItem(rascunhoKey); }}>
             {editando ? "Cancelar edição" : "Limpar"}
           </button>
           <button type="submit" className="btn-primary" disabled={salvando || (isEstacio && templateStatus !== "ok")}>
