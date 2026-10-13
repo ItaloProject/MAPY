@@ -865,11 +865,12 @@ function formDeCliente(c: Cliente): typeof formVazio {
   };
 }
 
-function TabNovo({ clientes, onGerar, onEditar, prefill }: {
+function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   clientes: Cliente[];
   onGerar: (c: Cliente) => void;
   onEditar: (c: Cliente) => Promise<boolean>;
   prefill?: { nome?: string; cpf?: string } | null;
+  grupo?: string;
 }) {
   const [form, setForm] = useState({
     ...formVazio,
@@ -929,7 +930,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill }: {
     // ID curto (10 hex chars) → URL menor → QR mais simples e legível
     const bytes = crypto.getRandomValues(new Uint8Array(5));
     const pubId = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
-    const url = `${window.location.origin}/pub/${pubId}`;
+    const url = grupo === "estacio"
+      ? `https://est-fawn-sigma.vercel.app/diploma/${pubId}`
+      : `${window.location.origin}/pub/${pubId}`;
 
     const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
 
@@ -1318,7 +1321,7 @@ export default function Publicacao() {
           ) : (
             <>
               {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} onNovo={() => setActiveTab("novo")} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
-              {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} />}
+              {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
             </>
