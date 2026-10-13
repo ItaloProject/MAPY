@@ -31,6 +31,21 @@ function carregarTemplateStorage(): ArrayBuffer | null {
   } catch { return null; }
 }
 
+async function uploadDocxStorage(blob: Blob, pubId: string): Promise<string | null> {
+  try {
+    const path = `estacio/${pubId}.docx`;
+    const { error } = await supabase.storage
+      .from("diplomas")
+      .upload(path, blob, {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        upsert: true,
+      });
+    if (error) return null;
+    const { data } = supabase.storage.from("diplomas").getPublicUrl(path);
+    return data.publicUrl;
+  } catch { return null; }
+}
+
 async function gerarDocxPreenchido(template: ArrayBuffer, dados: Record<string, string>): Promise<Blob> {
   const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
     import("pizzip"),
@@ -396,7 +411,7 @@ interface Cliente {
   nacionalidade: string; dataColacao: string; reitor: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
-  protocolo: string; url: string;
+  protocolo: string; url: string; docxUrl: string;
   pagamentoStatus: "pendente" | "pago";
   ativo: boolean;
 }
@@ -407,6 +422,7 @@ type DBRow = {
   nacionalidade?: string; data_colacao?: string; reitor?: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
+  docx_url?: string;
   pagamento_status?: "pendente" | "pago";
   ativo?: boolean;
   created_by?: string | null;
@@ -424,6 +440,7 @@ function rowToCliente(r: DBRow): Cliente {
     instituicao: r.instituicao, inep: r.inep, endereco: r.endereco, bairro: r.bairro,
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
+    docxUrl: r.docx_url ?? "",
     pagamentoStatus: r.pagamento_status === "pago" ? "pago" : "pendente",
     ativo: r.ativo !== false,
   };
@@ -441,6 +458,7 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
+    docx_url: c.docxUrl || undefined,
   };
 }
 
@@ -1072,11 +1090,19 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       const ok = await onEditar(atualizado);
       setSalvando(false);
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
+      let atualizadoFinal = atualizado;
       if (isEstacio && template) {
         const blob = await gerarDocxPreenchido(template, buildDados(atualizado)).catch(() => null);
         setDocxBlob(blob);
+        if (blob) {
+          const docxUrl = await uploadDocxStorage(blob, atualizado.pubId);
+          if (docxUrl) {
+            atualizadoFinal = { ...atualizado, docxUrl };
+            await onEditar(atualizadoFinal);
+          }
+        }
       }
-      setGerado(atualizado);
+      setGerado(atualizadoFinal);
       return;
     }
 
@@ -1108,20 +1134,25 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       municipio: form.municipio, cep: form.cep,
       modalidade: form.modalidade,
       anoConclusao: form.anoConclusao,
-      protocolo, url,
+      protocolo, url, docxUrl: "",
       pagamentoStatus: "pendente",
       ativo: true,
     };
 
     setSalvando(true);
+    let novoFinal = novo;
     if (isEstacio && template) {
       const blob = await gerarDocxPreenchido(template, buildDados(novo)).catch(() => null);
       setDocxBlob(blob);
+      if (blob) {
+        const docxUrl = await uploadDocxStorage(blob, pubId);
+        if (docxUrl) novoFinal = { ...novo, docxUrl };
+      }
     }
     setSalvando(false);
 
-    onGerar(novo);
-    setGerado(novo);
+    onGerar(novoFinal);
+    setGerado(novoFinal);
   }
 
   function novaPublicacao() {
