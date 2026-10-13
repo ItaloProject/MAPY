@@ -1000,38 +1000,28 @@ const TABS_BASE: { id: Tab; label: string }[] = [
   { id: "visualizar", label: "VISUALIZAR" },
 ];
 
-const SIA_ACESSOS_KEY = "sia-acessos-estacio";
+const SIA_ACESSOS_KEY = "sia-acessos-estacio"; // legado: usado só na migração única para o banco
+// A senha nunca é guardada em texto — apenas o hash (senhaHash). O login do aluno valida pelo hash.
 type AcessoSIA = {
-  id: string; matricula: string; senha: string; nome: string;
+  id: string; matricula: string; senhaHash: string; nome: string;
   pubId: string; url: string; criadoEm: string;
 };
+type AcessoRow = {
+  id: string; matricula: string; senha_hash: string; nome: string;
+  pub_id: string; url: string; criado_em: string;
+};
 
-function lerAcessos(): AcessoSIA[] {
-  try {
-    const raw = localStorage.getItem(SIA_ACESSOS_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(list)) return [];
-    return list.map((a: AcessoSIA & { usuario?: string }) => {
-      const pubId = a.pubId || "";
-      const matricula = a.matricula || a.usuario || "";
-      return {
-        id: a.id || crypto.randomUUID(),
-        matricula,
-        senha: a.senha || "",
-        nome: a.nome || "",
-        pubId,
-        url: pubId ? `${DIPLOMA_BASE}/${pubId}` : (a.url || DIPLOMA_BASE),
-        criadoEm: a.criadoEm || "",
-      };
-    }).filter(a => a.matricula);
-  } catch {
-    return [];
-  }
-}
-
-function gravarAcessos(next: AcessoSIA[]) {
-  localStorage.setItem(SIA_ACESSOS_KEY, JSON.stringify(next));
-  void publicarAcessosOnline(next);
+function rowToAcesso(r: AcessoRow): AcessoSIA {
+  const pubId = r.pub_id || "";
+  return {
+    id: r.id,
+    matricula: r.matricula || "",
+    senhaHash: r.senha_hash || "",
+    nome: r.nome || "",
+    pubId,
+    url: pubId ? `${DIPLOMA_BASE}/${pubId}` : (r.url || DIPLOMA_BASE),
+    criadoEm: r.criado_em || "",
+  };
 }
 
 async function hashSenha(senha: string): Promise<string> {
@@ -1040,15 +1030,26 @@ async function hashSenha(senha: string): Promise<string> {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Lista os acessos direto do banco (fonte da verdade, independente do navegador).
+async function carregarAcessos(): Promise<AcessoSIA[]> {
+  const { data, error } = await supabase
+    .from("acessos_estacio")
+    .select("*")
+    .order("criado_em", { ascending: false });
+  if (error) { console.error("[acessos]", error.message); return []; }
+  return ((data as AcessoRow[] | null) ?? []).map(rowToAcesso).filter(a => a.matricula);
+}
+
+// Reconstrói o estacio/acessos.json (lido pelo login do aluno) a partir do banco.
 async function publicarAcessosOnline(lista: AcessoSIA[]) {
   try {
-    const corpo = await Promise.all(lista.map(async a => ({
+    const corpo = lista.map(a => ({
       matricula: a.matricula,
-      senhaHash: await hashSenha(a.senha),
+      senhaHash: a.senhaHash,
       nome: a.nome,
       pubId: a.pubId,
       url: a.url,
-    })));
+    }));
     const blob = new Blob([JSON.stringify(corpo)], { type: "application/json" });
     const { error } = await supabase.storage.from(STORAGE_BUCKET).upload("estacio/acessos.json", blob, {
       contentType: "application/json",
@@ -1061,25 +1062,60 @@ async function publicarAcessosOnline(lista: AcessoSIA[]) {
   }
 }
 
+// Migração única: move acessos antigos do localStorage (com senha em texto) para o banco (hash).
+async function migrarAcessosLocais(): Promise<void> {
+  let legado: Array<{ matricula?: string; usuario?: string; senha?: string; nome?: string; pubId?: string; url?: string }> = [];
+  try { legado = JSON.parse(localStorage.getItem(SIA_ACESSOS_KEY) || "[]"); } catch { legado = []; }
+  if (!Array.isArray(legado) || !legado.length) return;
+  for (const a of legado) {
+    const matricula = (a.matricula || a.usuario || "").trim();
+    const senha = (a.senha || "").trim();
+    if (!matricula || !senha) continue;
+    const { data: existe } = await supabase.from("acessos_estacio").select("id").eq("matricula", matricula).limit(1);
+    if (((existe as { id: string }[] | null) ?? []).length) continue;
+    const pubId = a.pubId || "";
+    await supabase.from("acessos_estacio").insert({
+      matricula,
+      senha_hash: await hashSenha(senha),
+      nome: a.nome || "",
+      pub_id: pubId,
+      url: pubId ? `${DIPLOMA_BASE}/${pubId}` : (a.url || DIPLOMA_BASE),
+    });
+  }
+  localStorage.removeItem(SIA_ACESSOS_KEY);
+}
+
 function csvCampo(v: string) {
   const s = String(v ?? "");
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function baixarAcessos(lista: AcessoSIA[] = lerAcessos()) {
-  const linhas = [
-    ["Nome", "Matrícula", "Senha", "Código", "Diploma", "Criado em"].join(";"),
-    ...lista.map(a => [a.nome, a.matricula, a.senha, a.pubId, a.url, a.criadoEm].map(csvCampo).join(";")),
-  ];
+function baixarCsv(nomeArquivo: string, linhas: string[]) {
   const blob = new Blob(["\uFEFF" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const href = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = href;
-  a.download = "sia-acessos.csv";
+  a.download = nomeArquivo;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(href);
+}
+
+// Exporta a lista SEM a senha (que não é mais guardada em texto, só o hash).
+function baixarAcessos(lista: AcessoSIA[]) {
+  baixarCsv("sia-acessos.csv", [
+    ["Nome", "Matrícula", "Código", "Diploma", "Criado em"].join(";"),
+    ...lista.map(a => [a.nome, a.matricula, a.pubId, a.url, a.criadoEm].map(csvCampo).join(";")),
+  ]);
+}
+
+// Baixa a credencial recém-criada (único momento em que a senha existe em texto).
+function baixarCredencial(cred: { matricula: string; senha: string }, nome: string) {
+  baixarCsv(`sia-acesso-${cred.matricula}.csv`, [
+    ["Nome", "Matrícula", "Senha"].join(";"),
+    [nome, cred.matricula, cred.senha].map(csvCampo).join(";"),
+  ]);
 }
 
 function matriculaDoDiploma(dados: { registroNumero?: string; protocolo?: string; pubId?: string }): string {
@@ -1097,67 +1133,114 @@ function gerarSenhaAcesso(): string {
   return senha;
 }
 
-function salvarAcessoDiploma(dados: { matricula: string; senha: string; nome: string; pubId: string; url?: string }) {
+// Cria/atualiza o acesso de um diploma no banco. Senha em branco mantém a senha atual (não troca o hash).
+async function salvarAcessoDiploma(dados: { matricula: string; senha: string; nome: string; pubId: string; url?: string }): Promise<AcessoSIA[]> {
   const matricula = dados.matricula.trim();
   const url = dados.url || `${DIPLOMA_BASE}/${dados.pubId}`;
-  const resto = lerAcessos().filter(a => a.pubId !== dados.pubId && a.matricula.toLowerCase() !== matricula.toLowerCase());
-  const atual = lerAcessos().find(a => a.pubId === dados.pubId);
-  const next: AcessoSIA[] = [{
-    id: atual?.id || crypto.randomUUID(),
+
+  // Acesso já existente deste diploma (para preservar o hash quando a senha vier em branco).
+  const { data: doPub } = await supabase.from("acessos_estacio").select("*").eq("pub_id", dados.pubId);
+  const atual = ((doPub as AcessoRow[] | null) ?? [])[0];
+  const senhaHash = dados.senha.trim() ? await hashSenha(dados.senha.trim()) : (atual?.senha_hash ?? "");
+  if (!senhaHash) throw new Error("sem-senha");
+
+  // Remove linhas conflitantes (mesmo diploma ou mesma matrícula) antes de inserir a atual.
+  const idsRemover = new Set<string>(((doPub as AcessoRow[] | null) ?? []).map(r => r.id));
+  const { data: mesmaMat } = await supabase.from("acessos_estacio").select("id").eq("matricula", matricula);
+  ((mesmaMat as { id: string }[] | null) ?? []).forEach(r => idsRemover.add(r.id));
+  if (idsRemover.size) await supabase.from("acessos_estacio").delete().in("id", [...idsRemover]);
+
+  await supabase.from("acessos_estacio").insert({
     matricula,
-    senha: dados.senha,
+    senha_hash: senhaHash,
     nome: dados.nome,
-    pubId: dados.pubId,
+    pub_id: dados.pubId,
     url,
-    criadoEm: atual?.criadoEm || new Date().toLocaleString("pt-BR"),
-  }, ...resto];
-  gravarAcessos(next);
-  return next;
+    criado_em: atual?.criado_em ?? new Date().toISOString(),
+  });
+
+  const lista = await carregarAcessos();
+  await publicarAcessosOnline(lista);
+  return lista;
+}
+
+async function apagarAcesso(id: string): Promise<AcessoSIA[]> {
+  await supabase.from("acessos_estacio").delete().eq("id", id);
+  const lista = await carregarAcessos();
+  await publicarAcessosOnline(lista);
+  return lista;
 }
 
 function TabAcesso({ clientes }: { clientes: Cliente[] }) {
-  const [acessos, setAcessos] = useState<AcessoSIA[]>(() => lerAcessos());
+  const [acessos, setAcessos] = useState<AcessoSIA[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [pubId, setPubId] = useState("");
   const [matricula, setMatricula] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
+  const [aviso, setAviso] = useState("");
   const [busca, setBusca] = useState("");
 
-  function persist(next: AcessoSIA[]) {
-    setAcessos(next);
-    gravarAcessos(next);
-  }
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      await migrarAcessosLocais();
+      const lista = await carregarAcessos();
+      if (vivo) { setAcessos(lista); setCarregando(false); }
+    })();
+    return () => { vivo = false; };
+  }, []);
+
+  const acessoEscolhido = acessos.find(a => a.pubId === pubId);
 
   function escolherDiploma(id: string) {
     setPubId(id);
     setErro("");
+    setAviso("");
     const cliente = clientes.find(c => c.pubId === id);
-    const acesso = lerAcessos().find(a => a.pubId === id);
+    const acesso = acessos.find(a => a.pubId === id);
     setMatricula(cliente ? matriculaDoDiploma(cliente) : (acesso?.matricula ?? ""));
-    setSenha(acesso?.senha ?? "");
+    setSenha("");
   }
 
-  function criar(e: FormEvent) {
+  async function criar(e: FormEvent) {
     e.preventDefault();
     const cliente = clientes.find(c => c.pubId === pubId);
     const m = cliente ? matriculaDoDiploma(cliente) : matricula.trim();
     if (!cliente) { setErro("Escolha o diploma criado na guia NOVO."); return; }
-    if (!m || !senha.trim()) { setErro("Este diploma ainda não tem número de registro nem protocolo."); return; }
+    if (!m) { setErro("Este diploma ainda não tem número de registro nem protocolo."); return; }
+    if (!senha.trim() && !acessoEscolhido) { setErro("Informe a senha de acesso."); return; }
     if (acessos.some(a => a.matricula.toLowerCase() === m.toLowerCase() && a.pubId !== cliente.pubId)) {
       setErro("Esta matrícula já aponta para outro diploma.");
       return;
     }
     const url = cliente.url || `${DIPLOMA_BASE}/${cliente.pubId}`;
-    persist(salvarAcessoDiploma({ matricula: m, senha, nome: cliente.nome, pubId: cliente.pubId, url }));
-    setErro("");
+    const senhaDigitada = senha.trim();
+    setSalvando(true);
+    try {
+      setAcessos(await salvarAcessoDiploma({ matricula: m, senha: senhaDigitada, nome: cliente.nome, pubId: cliente.pubId, url }));
+      setErro("");
+      setSenha("");
+      if (senhaDigitada) {
+        baixarCredencial({ matricula: m, senha: senhaDigitada }, cliente.nome);
+        setAviso("Acesso salvo no banco. A senha foi baixada agora — ela não fica visível depois.");
+      } else {
+        setAviso("Acesso atualizado (senha mantida).");
+      }
+    } catch {
+      setErro("Não foi possível salvar o acesso no banco.");
+    } finally {
+      setSalvando(false);
+    }
   }
 
-  function apagar(id: string) {
-    persist(acessos.filter(a => a.id !== id));
+  async function apagar(id: string) {
     if (acessos.find(a => a.id === id)?.pubId === pubId) {
       setMatricula("");
       setSenha("");
     }
+    setAcessos(await apagarAcesso(id));
   }
 
   function baixarArquivo() {
@@ -1186,12 +1269,14 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)" }}>
           Senha
-          <input className="edit-input" type="text" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha de acesso" autoComplete="new-password" />
+          <input className="edit-input" type="text" value={senha} onChange={e => setSenha(e.target.value)}
+            placeholder={acessoEscolhido ? "Em branco = manter atual" : "Senha de acesso"} autoComplete="new-password" />
         </label>
-        <button className="btn-primary" type="submit">Salvar acesso</button>
-        <button className="btn-sm" type="button" onClick={baixarArquivo}>Baixar senhas (.csv)</button>
+        <button className="btn-primary" type="submit" disabled={salvando}>{salvando ? "Salvando…" : "Salvar acesso"}</button>
+        <button className="btn-sm" type="button" onClick={baixarArquivo}>Baixar lista (.csv)</button>
       </form>
       {erro && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{erro}</p>}
+      {aviso && <p style={{ color: "#4ade80", fontSize: 13, margin: "0 0 12px" }}>{aviso}</p>}
       <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px" }}>
         {diplomaEscolhido
           ? <>Esta matrícula abre {diplomaEscolhido.url || `${DIPLOMA_BASE}/${diplomaEscolhido.pubId}`}</>
@@ -1208,13 +1293,15 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtrados.length === 0 ? (
+            {carregando ? (
+              <tr className="pub-empty"><td colSpan={5}><div className="empty-state"><p>Carregando acessos…</p></div></td></tr>
+            ) : filtrados.length === 0 ? (
               <tr className="pub-empty"><td colSpan={5}><div className="empty-state"><p>Nenhum acesso ligado a um diploma</p></div></td></tr>
             ) : filtrados.map(a => (
               <tr key={a.id}>
                 <td className="pc-title">{a.nome || "—"}</td>
                 <td className="pc-line" data-label="Matrícula">{a.matricula}</td>
-                <td className="pc-line" data-label="Senha">{a.senha}</td>
+                <td className="pc-line" data-label="Senha" title="Guardada apenas como hash">••••••</td>
                 <td className="pc-line" data-label="Diploma">
                   <a href={a.url} target="_blank" rel="noreferrer">{a.url.replace(DIPLOMA_BASE + "/", "")}</a>
                 </td>
@@ -1948,10 +2035,11 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     return () => { cancelado = true; };
   }, [isEstacio, emec, emecManual]);
 
-  function carregarAcesso(id: string) {
-    const acesso = lerAcessos().find(a => a.pubId === id);
-    setMatricula(acesso?.matricula ?? "");
-    setSenhaAcesso(acesso?.senha ?? "");
+  async function carregarAcesso(id: string) {
+    setMatricula("");
+    setSenhaAcesso("");
+    const { data } = await supabase.from("acessos_estacio").select("matricula").eq("pub_id", id).limit(1);
+    setMatricula(((data as { matricula: string }[] | null) ?? [])[0]?.matricula ?? "");
   }
 
   function selecionarEdicao(pubId: string) {
@@ -2040,8 +2128,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     if (isEstacio && !editando) {
       const m = matriculaDoDiploma({ registroNumero: form.registroNumero, protocolo: form.protocolo });
       if (!m) { setErro("Gere o nº de registro do diploma antes de criar o acesso."); return; }
-      const repetida = lerAcessos().some(a => a.matricula.toLowerCase() === m.toLowerCase());
-      if (repetida) { setErro("Este nº de registro já é a matrícula de outro diploma."); return; }
+      const { data: mesmaMat, error: erroMat } = await supabase.from("acessos_estacio").select("id").ilike("matricula", m).limit(1);
+      if (erroMat) { setErro("Não foi possível confirmar se a matrícula já existe."); return; }
+      if (((mesmaMat as { id: string }[] | null) ?? []).length) { setErro("Este nº de registro já é a matrícula de outro diploma."); return; }
       credenciaisNovas = { matricula: m, senha: senhaAcesso.trim() || gerarSenhaAcesso() };
     }
     if (isEstacio) {
@@ -2080,9 +2169,10 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       if (isEstacio && !comDiploma) return;
       const salvo = comDiploma ?? atualizado;
       const matriculaDiploma = matriculaDoDiploma(salvo);
-      const acessoAtual = lerAcessos().find(a => a.pubId === salvo.pubId);
-      const senha = senhaAcesso.trim() || acessoAtual?.senha || "";
-      if (matriculaDiploma && senha) vincularAcesso(salvo, { matricula: matriculaDiploma, senha });
+      const { data: doPub } = await supabase.from("acessos_estacio").select("id").eq("pub_id", salvo.pubId).limit(1);
+      const temAcesso = ((doPub as { id: string }[] | null) ?? []).length > 0;
+      const senha = senhaAcesso.trim();
+      if (matriculaDiploma && (senha || temAcesso)) await vincularAcesso(salvo, { matricula: matriculaDiploma, senha });
       else setAcessoCriado(null);
       setGerado(salvo);
       return;
@@ -2131,18 +2221,25 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     onGerar(novoFinal);
     if (isEstacio && credenciaisNovas) {
       const matriculaDiploma = matriculaDoDiploma(novoFinal);
-      vincularAcesso(novoFinal, { matricula: matriculaDiploma, senha: credenciaisNovas.senha });
+      await vincularAcesso(novoFinal, { matricula: matriculaDiploma, senha: credenciaisNovas.senha });
     }
     setGerado(novoFinal);
   }
 
-  function vincularAcesso(c: Cliente, cred: { matricula: string; senha: string }) {
+  // Senha em branco = mantém o hash atual no banco (a senha antiga não é recuperável).
+  async function vincularAcesso(c: Cliente, cred: { matricula: string; senha: string }) {
     const url = c.url || `${DIPLOMA_BASE}/${c.pubId}`;
-    const lista = salvarAcessoDiploma({ matricula: cred.matricula, senha: cred.senha, nome: c.nome, pubId: c.pubId, url });
+    try {
+      await salvarAcessoDiploma({ matricula: cred.matricula, senha: cred.senha, nome: c.nome, pubId: c.pubId, url });
+    } catch {
+      setErro("Diploma salvo, mas não foi possível gravar o acesso do SIA no banco.");
+      setAcessoCriado(null);
+      return;
+    }
     setAcessoCriado(cred);
     setMatricula(cred.matricula);
-    setSenhaAcesso(cred.senha);
-    baixarAcessos(lista);
+    setSenhaAcesso("");
+    if (cred.senha) baixarCredencial(cred, c.nome);
   }
 
   function novaPublicacao() {
@@ -2203,10 +2300,17 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
           {acessoCriado && (
             <div style={{ marginTop: 12, textAlign: "left", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
-              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>Acesso do SIA — o arquivo sia-acessos.csv foi baixado</div>
+              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>
+                {acessoCriado.senha
+                  ? "Acesso do SIA salvo no banco — anote a senha: ela só aparece agora (o arquivo .csv foi baixado)"
+                  : "Acesso do SIA atualizado no banco (senha mantida)"}
+              </div>
               <div style={{ fontSize: 14, color: "var(--fg)" }}>Matrícula: <strong>{acessoCriado.matricula}</strong></div>
-              <div style={{ fontSize: 14, color: "var(--fg)", marginTop: 4 }}>Senha: <strong>{acessoCriado.senha}</strong></div>
-              <button type="button" className="btn-sm" style={{ marginTop: 10 }} onClick={() => baixarAcessos()}>Baixar senhas (.csv) de novo</button>
+              {acessoCriado.senha && <>
+                <div style={{ fontSize: 14, color: "var(--fg)", marginTop: 4 }}>Senha: <strong>{acessoCriado.senha}</strong></div>
+                <button type="button" className="btn-sm" style={{ marginTop: 10 }}
+                  onClick={() => baixarCredencial(acessoCriado, gerado.nome)}>Baixar credencial (.csv) de novo</button>
+              </>}
             </div>
           )}
         </div>
@@ -2596,8 +2700,11 @@ export default function Publicacao() {
     }
     load();
     if (grupo === "estacio") {
-      const lista = lerAcessos();
-      if (lista.length) void publicarAcessosOnline(lista);
+      void (async () => {
+        await migrarAcessosLocais();
+        const lista = await carregarAcessos();
+        if (lista.length) await publicarAcessosOnline(lista);
+      })();
     }
   }, [grupo]);
 
