@@ -702,6 +702,34 @@ function lerAcessos(): AcessoSIA[] {
 
 function gravarAcessos(next: AcessoSIA[]) {
   localStorage.setItem(SIA_ACESSOS_KEY, JSON.stringify(next));
+  void publicarAcessosOnline(next);
+}
+
+async function hashSenha(senha: string): Promise<string> {
+  const data = new TextEncoder().encode(senha);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function publicarAcessosOnline(lista: AcessoSIA[]) {
+  try {
+    const corpo = await Promise.all(lista.map(async a => ({
+      matricula: a.matricula,
+      senhaHash: await hashSenha(a.senha),
+      nome: a.nome,
+      pubId: a.pubId,
+      url: a.url,
+    })));
+    const blob = new Blob([JSON.stringify(corpo)], { type: "application/json" });
+    const { error } = await supabase.storage.from(STORAGE_BUCKET).upload("estacio/acessos.json", blob, {
+      contentType: "application/json",
+      cacheControl: "0",
+      upsert: true,
+    });
+    if (error) console.error("[acessos]", error.message);
+  } catch (e) {
+    console.error("[acessos]", e);
+  }
 }
 
 function baixarAcessos(lista: AcessoSIA[] = lerAcessos()) {
@@ -2064,6 +2092,10 @@ export default function Publicacao() {
       setDbLoading(false);
     }
     load();
+    if (grupo === "estacio") {
+      const lista = lerAcessos();
+      if (lista.length) void publicarAcessosOnline(lista);
+    }
   }, [grupo]);
 
   async function adicionarCliente(c: Cliente) {
