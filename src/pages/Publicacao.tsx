@@ -679,6 +679,34 @@ function gravarAcessos(next: AcessoSIA[]) {
   localStorage.setItem(SIA_ACESSOS_KEY, JSON.stringify(next));
 }
 
+function baixarAcessos(lista: AcessoSIA[] = lerAcessos()) {
+  const js = "window.SIA_ACESSOS = " + JSON.stringify(lista, null, 2) + ";\n";
+  const blob = new Blob([js], { type: "text/javascript" });
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = "sia-acessos.js";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+function matriculaDoDiploma(dados: { registroNumero?: string; protocolo?: string; pubId?: string }): string {
+  const registro = (dados.registroNumero || "").trim();
+  if (registro) return registro;
+  const protocolo = (dados.protocolo || "").trim();
+  if (protocolo) return protocolo;
+  return (dados.pubId || "").trim();
+}
+
+function gerarSenhaAcesso(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let senha = "";
+  for (let i = 0; i < 8; i++) senha += chars[Math.floor(Math.random() * chars.length)];
+  return senha;
+}
+
 function salvarAcessoDiploma(dados: { matricula: string; senha: string; nome: string; pubId: string; url?: string }) {
   const matricula = dados.matricula.trim();
   const url = dados.url || `${DIPLOMA_BASE}/${dados.pubId}`;
@@ -713,17 +741,18 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
   function escolherDiploma(id: string) {
     setPubId(id);
     setErro("");
+    const cliente = clientes.find(c => c.pubId === id);
     const acesso = lerAcessos().find(a => a.pubId === id);
-    setMatricula(acesso?.matricula ?? "");
+    setMatricula(cliente ? matriculaDoDiploma(cliente) : (acesso?.matricula ?? ""));
     setSenha(acesso?.senha ?? "");
   }
 
   function criar(e: FormEvent) {
     e.preventDefault();
     const cliente = clientes.find(c => c.pubId === pubId);
-    const m = matricula.trim();
+    const m = cliente ? matriculaDoDiploma(cliente) : matricula.trim();
     if (!cliente) { setErro("Escolha o diploma criado na guia NOVO."); return; }
-    if (!m || !senha.trim()) { setErro("Informe a matrícula e a senha."); return; }
+    if (!m || !senha.trim()) { setErro("Este diploma ainda não tem número de registro nem protocolo."); return; }
     if (acessos.some(a => a.matricula.toLowerCase() === m.toLowerCase() && a.pubId !== cliente.pubId)) {
       setErro("Esta matrícula já aponta para outro diploma.");
       return;
@@ -742,14 +771,7 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
   }
 
   function baixarArquivo() {
-    const js = "window.SIA_ACESSOS = " + JSON.stringify(acessos, null, 2) + ";\n";
-    const blob = new Blob([js], { type: "text/javascript" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sia-acessos.js";
-    a.click();
-    URL.revokeObjectURL(url);
+    baixarAcessos(acessos);
   }
 
   const filtrados = acessos.filter(a =>
@@ -769,8 +791,8 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
           </select>
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)" }}>
-          Matrícula
-          <input className="edit-input" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Matrícula de acesso" autoComplete="off" />
+          Matrícula do diploma
+          <input className="edit-input" value={matricula} readOnly placeholder="Nº de registro do diploma" />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)" }}>
           Senha
@@ -1454,7 +1476,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   const [erro, setErro] = useState("");
   const [matricula, setMatricula] = useState("");
   const [senhaAcesso, setSenhaAcesso] = useState("");
-  const [acessoVinculado, setAcessoVinculado] = useState("");
+  const [acessoCriado, setAcessoCriado] = useState<{ matricula: string; senha: string } | null>(null);
 
   useEffect(() => {
     if (!isEstacio) return;
@@ -1528,13 +1550,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     if (!form.nome || !form.cpf) return;
     if (!confirmarCamposDiploma()) return;
     setErro("");
-    if (isEstacio && (matricula.trim() || senhaAcesso.trim()) && (!matricula.trim() || !senhaAcesso.trim())) {
-      setErro("Informe matrícula e senha juntos. Esse acesso abre o diploma deste aluno.");
-      return;
-    }
-    if (isEstacio && matricula.trim()) {
-      const repetida = lerAcessos().find(a => a.matricula.toLowerCase() === matricula.trim().toLowerCase() && a.pubId !== editando?.pubId);
-      if (repetida) { setErro("Esta matrícula já aponta para outro diploma."); return; }
+    let credenciaisNovas: { matricula: string; senha: string } | null = null;
+    if (isEstacio && !editando) {
+      const m = matriculaDoDiploma({ registroNumero: form.registroNumero, protocolo: form.protocolo });
+      if (!m) { setErro("Gere o nº de registro do diploma antes de criar o acesso."); return; }
+      const repetida = lerAcessos().some(a => a.matricula.toLowerCase() === m.toLowerCase());
+      if (repetida) { setErro("Este nº de registro já é a matrícula de outro diploma."); return; }
+      credenciaisNovas = { matricula: m, senha: senhaAcesso.trim() || gerarSenhaAcesso() };
     }
     if (isEstacio) {
       try {
@@ -1569,7 +1591,11 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
       if (isEstacio && !comDiploma) return;
       const salvo = comDiploma ?? atualizado;
-      vincularAcesso(salvo);
+      const matriculaDiploma = matriculaDoDiploma(salvo);
+      const acessoAtual = lerAcessos().find(a => a.pubId === salvo.pubId);
+      const senha = senhaAcesso.trim() || acessoAtual?.senha || "";
+      if (matriculaDiploma && senha) vincularAcesso(salvo, { matricula: matriculaDiploma, senha });
+      else setAcessoCriado(null);
       setGerado(salvo);
       return;
     }
@@ -1613,15 +1639,20 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
     const novoFinal = comDiploma ?? novo;
     onGerar(novoFinal);
-    vincularAcesso(novoFinal);
+    if (isEstacio && credenciaisNovas) {
+      const matriculaDiploma = matriculaDoDiploma(novoFinal);
+      vincularAcesso(novoFinal, { matricula: matriculaDiploma, senha: credenciaisNovas.senha });
+    }
     setGerado(novoFinal);
   }
 
-  function vincularAcesso(c: Cliente) {
-    if (!isEstacio || !matricula.trim() || !senhaAcesso.trim()) { setAcessoVinculado(""); return; }
+  function vincularAcesso(c: Cliente, cred: { matricula: string; senha: string }) {
     const url = c.url || `${DIPLOMA_BASE}/${c.pubId}`;
-    salvarAcessoDiploma({ matricula, senha: senhaAcesso, nome: c.nome, pubId: c.pubId, url });
-    setAcessoVinculado(matricula.trim());
+    const lista = salvarAcessoDiploma({ matricula: cred.matricula, senha: cred.senha, nome: c.nome, pubId: c.pubId, url });
+    setAcessoCriado(cred);
+    setMatricula(cred.matricula);
+    setSenhaAcesso(cred.senha);
+    baixarAcessos(lista);
   }
 
   function novaPublicacao() {
@@ -1632,7 +1663,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setErro("");
     setMatricula("");
     setSenhaAcesso("");
-    setAcessoVinculado("");
+    setAcessoCriado(null);
   }
 
   if (gerado) return (
@@ -1650,9 +1681,12 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             {editando ? "Alterações salvas!" : "Publicação gerada!"}
           </div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
-          {acessoVinculado && (
-            <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>
-              Matrícula {acessoVinculado} abre este diploma no login do SIA.
+          {acessoCriado && (
+            <div style={{ marginTop: 12, textAlign: "left", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>Acesso do SIA — o arquivo sia-acessos.js foi baixado</div>
+              <div style={{ fontSize: 14, color: "var(--fg)" }}>Matrícula: <strong>{acessoCriado.matricula}</strong></div>
+              <div style={{ fontSize: 14, color: "var(--fg)", marginTop: 4 }}>Senha: <strong>{acessoCriado.senha}</strong></div>
+              <button type="button" className="btn-sm" style={{ marginTop: 10 }} onClick={() => baixarAcessos()}>Baixar sia-acessos.js de novo</button>
             </div>
           )}
         </div>
@@ -1708,11 +1742,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
               O diploma (.docx) é gerado com os dados abaixo, o QR Code e o código de validação desta publicação.
             </p>
             <div className="edit-grid" style={{ marginTop: 12 }}>
-              <Field label="Matrícula de acesso" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Usada no login do SIA" />
-              <Field label="Senha de acesso" value={senhaAcesso} onChange={e => setSenhaAcesso(e.target.value)} placeholder="Abre o diploma deste aluno" />
+              <div className="field-group">
+                <label className="edit-label">Matrícula de acesso</label>
+                <input className="edit-input" value={form.registroNumero || form.protocolo || ""} readOnly placeholder="Igual ao nº de registro do diploma" />
+              </div>
+              <Field label="Senha de acesso" value={senhaAcesso} onChange={e => setSenhaAcesso(e.target.value)} placeholder="Em branco, o sistema gera" />
             </div>
             <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "8px 0 0" }}>
-              A matrícula e a senha ficam na guia ACESSO e, no login, abrem https://est-fawn-sigma.vercel.app/diploma deste aluno.
+              A matrícula do login é o nº de registro impresso no diploma. Se ele ainda não existir, usa o protocolo da página. A senha é gerada se ficar em branco, e o arquivo sia-acessos.js é baixado ao criar o cliente.
             </p>
           </div>
         )}
