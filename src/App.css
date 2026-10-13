@@ -20,12 +20,53 @@
 .sia-page {
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 1.5rem 1rem;
   background: var(--sia-bg);
   font-family: var(--sia-f);
   color: var(--sia-fg);
+}
+
+/* Banner institucional (carrossel) que desce/sobe */
+.sia-banner {
+  width: 100%;
+  max-width: 440px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  transition: max-height 0.4s ease, opacity 0.3s ease, margin-bottom 0.4s ease;
+}
+.sia-banner--open {
+  max-height: 460px;
+  opacity: 1;
+  margin-bottom: 1rem;
+}
+.sia-banner-inner {
+  background: linear-gradient(218deg, rgb(39, 171, 191) 0%, rgb(121, 198, 192) 100%);
+  border-radius: 14px;
+  padding: 1.6rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 10px 40px rgba(16, 36, 64, 0.12);
+}
+.sia-banner-texto {
+  color: #fff;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.sia-banner-texto strong { font-weight: 800; }
+.sia-banner-img {
+  width: 100%;
+  max-width: 285px;
+  height: auto;
+  display: block;
 }
 
 .sia-card {
@@ -60,6 +101,9 @@
   color: var(--sia-muted);
   cursor: pointer;
 }
+.sia-collapse svg { transition: transform 0.3s ease; }
+.sia-collapse.aberto svg { transform: rotate(180deg); }
+.sia-collapse:hover { border-color: var(--sia-blue); color: var(--sia-blue); }
 
 /* Marca */
 .sia-brand {

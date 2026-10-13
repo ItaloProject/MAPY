@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
 import { supabase } from "../lib/supabase";
@@ -14,6 +14,8 @@ function dataExtenso(): string {
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const navigate = useNavigate();
 
+  useEffect(() => { document.title = "SIA - Sistema de Informações Acadêmicas - Estacio"; }, []);
+
   const [matricula, setMatricula] = useState("");
   const [senha,     setSenha]     = useState("");
   const [showPass,  setShowPass]  = useState(false);
@@ -21,6 +23,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [loading,   setLoading]   = useState(false);
   const [erro,      setErro]      = useState<string | null>(null);
   const [sucesso,   setSucesso]   = useState(false);
+  const [bannerAberto, setBannerAberto] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +55,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       return;
     }
 
+    // Registra o último acesso (usuário gerenciado pela matrícula, admin-mestre pelo e-mail).
+    const filtro = email.endsWith("@emec.app") ? { auth_user_id: data.user.id } : { email };
+    await supabase.from("usuarios").update({ ultimo_acesso: new Date().toISOString() }).match(filtro);
+
     setLoading(false);
     setSucesso(true);
     setTimeout(() => { onLogin(); navigate("/dashboard"); }, 900);
@@ -61,10 +68,29 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="sia-page">
+
+      {/* Banner institucional que desce/sobe ao clicar no chevron */}
+      <div className={`sia-banner${bannerAberto ? " sia-banner--open" : ""}`} aria-hidden={!bannerAberto}>
+        <div className="sia-banner-inner">
+          <div className="sia-banner-texto">Ensino <strong>Estácio.</strong><br />Brilhe com <strong>+ tecnologia.</strong></div>
+          <img
+            className="sia-banner-img"
+            src="https://sia.estacio.br/sianet/Content/SiteNovo/dist/img/banners/banner_01.png"
+            alt=""
+          />
+        </div>
+      </div>
+
       <div className="sia-card">
 
-        {/* Chevron decorativo no topo direito */}
-        <button type="button" className="sia-collapse" aria-label="Recolher" tabIndex={-1}>
+        {/* Chevron: abre/fecha o banner */}
+        <button
+          type="button"
+          className={`sia-collapse${bannerAberto ? " aberto" : ""}`}
+          aria-label={bannerAberto ? "Recolher imagem" : "Mostrar imagem"}
+          aria-expanded={bannerAberto}
+          onClick={() => setBannerAberto(v => !v)}
+        >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="6 9 12 15 18 9" />
           </svg>
