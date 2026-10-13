@@ -7,6 +7,67 @@ import { marcarConcluido } from "../lib/controle";
 import "../components/Layout.css";
 import "./Publicacao.css";
 
+/* ── Helpers de template DOCX ── */
+const TEMPLATE_KEY = "docx_template_estacio";
+
+function salvarTemplateStorage(buf: ArrayBuffer) {
+  try {
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    localStorage.setItem(TEMPLATE_KEY, btoa(bin));
+  } catch {}
+}
+
+function carregarTemplateStorage(): ArrayBuffer | null {
+  try {
+    const b64 = localStorage.getItem(TEMPLATE_KEY);
+    if (!b64) return null;
+    const bin = atob(b64);
+    const buf = new ArrayBuffer(bin.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return buf;
+  } catch { return null; }
+}
+
+async function gerarDocxPreenchido(template: ArrayBuffer, dados: Record<string, string>): Promise<Blob> {
+  const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
+    import("pizzip"),
+    import("docxtemplater"),
+  ]);
+  const zip = new PizZip(template);
+  const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+  doc.render(dados);
+  const out = doc.getZip().generate({ type: "arraybuffer" });
+  return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+async function renderizarDocx(blob: Blob, container: HTMLElement) {
+  const { renderAsync } = await import("docx-preview");
+  container.innerHTML = "";
+  await renderAsync(blob, container);
+}
+
+/* ── Preview inline do DOCX ── */
+function DocxPreview({ blob }: { blob: Blob }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [erro, setErro] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    renderizarDocx(blob, ref.current).catch(() => setErro(true));
+  }, [blob]);
+
+  if (erro) return <p style={{ color: "#f87171", fontSize: 13 }}>Não foi possível renderizar o documento.</p>;
+  return (
+    <div ref={ref} style={{
+      background: "#fff", borderRadius: 6, border: "1px solid #e5e5e5",
+      padding: "8px", maxHeight: 500, overflowY: "auto", width: "100%",
+    }} />
+  );
+}
+
 /* ── Máscaras ── */
 function maskData(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 8);
@@ -872,12 +933,16 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   prefill?: { nome?: string; cpf?: string } | null;
   grupo?: string;
 }) {
+  const isEstacio = grupo === "estacio";
   const [form, setForm] = useState({
     ...formVazio,
     nome: prefill?.nome ?? "",
     cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "",
   });
   const [gerado, setGerado] = useState<Cliente | null>(null);
+  const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
+  const [template, setTemplate] = useState<ArrayBuffer | null>(() => isEstacio ? carregarTemplateStorage() : null);
+  const [templateNome, setTemplateNome] = useState<string>(() => isEstacio && localStorage.getItem(TEMPLATE_KEY) ? "Template salvo" : "");
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -903,6 +968,51 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     };
   }
 
+  function importarTemplate(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const buf = reader.result as ArrayBuffer;
+      setTemplate(buf);
+      setTemplateNome(file.name);
+      salvarTemplateStorage(buf);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  }
+
+  function removerTemplate() {
+    setTemplate(null);
+    setTemplateNome("");
+    localStorage.removeItem(TEMPLATE_KEY);
+  }
+
+  function buildDados(cliente: Cliente): Record<string, string> {
+    return {
+      nome: cliente.nome,
+      cpf: cliente.cpf,
+      nascimento: cliente.nascimento,
+      municipio: cliente.municipio,
+      rg: cliente.rg,
+      nome_mae: cliente.nomeMae,
+      nome_pai: cliente.nomePai,
+      curso: cliente.curso,
+      modalidade: cliente.modalidade,
+      ano_conclusao: cliente.anoConclusao,
+      data: cliente.data,
+      instituicao: cliente.instituicao,
+      inep: cliente.inep,
+      endereco: cliente.endereco,
+      bairro: cliente.bairro,
+      cep: cliente.cep,
+      protocolo: cliente.protocolo,
+      observacao: cliente.observacao,
+      pub_id: cliente.pubId,
+      url: cliente.url,
+    };
+  }
+
   async function gerar(e: React.FormEvent) {
     e.preventDefault();
     if (!form.nome || !form.cpf) return;
@@ -923,6 +1033,10 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       const ok = await onEditar(atualizado);
       setSalvando(false);
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
+      if (isEstacio && template) {
+        const blob = await gerarDocxPreenchido(template, buildDados(atualizado)).catch(() => null);
+        setDocxBlob(blob);
+      }
       setGerado(atualizado);
       return;
     }
@@ -935,7 +1049,6 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       : `${window.location.origin}/pub/${pubId}`;
 
     const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
-
     const protocolo = form.protocolo || Date.now().toString().slice(-13);
 
     const novo: Cliente = {
@@ -957,6 +1070,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       ativo: true,
     };
 
+    setSalvando(true);
+    if (isEstacio && template) {
+      const blob = await gerarDocxPreenchido(template, buildDados(novo)).catch(() => null);
+      setDocxBlob(blob);
+    }
+    setSalvando(false);
+
     onGerar(novo);
     setGerado(novo);
   }
@@ -964,16 +1084,16 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   function novaPublicacao() {
     setForm(formVazio);
     setGerado(null);
+    setDocxBlob(null);
     setEditando(null);
     setErro("");
   }
 
   if (gerado) return (
     <div className="tab-body" style={{ position: "relative" }}>
-      {/* Canvas oculto para capturar PNG estático */}
       <QRCapture pubId={gerado.pubId} url={gerado.url} />
 
-      <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20, alignItems: "center", textAlign: "center" }}>
+      <div style={{ maxWidth: 600, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20, alignItems: "center", textAlign: "center" }}>
         <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(52,211,153,0.12)", border: "2px solid #34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
@@ -998,6 +1118,22 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           </a>
         </div>
 
+        {docxBlob && (
+          <div style={{ width: "100%", textAlign: "left" }}>
+            <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Pré-visualização do documento</span>
+              <a
+                href={URL.createObjectURL(docxBlob)}
+                download={`${gerado.nome.split(" ")[0].toLowerCase()}.docx`}
+                style={{ fontSize: 12, color: "var(--accent)" }}
+              >
+                ↓ Baixar .docx
+              </a>
+            </div>
+            <DocxPreview blob={docxBlob} />
+          </div>
+        )}
+
         <div className="pub-done-actions">
           <button className="btn-sm" onClick={() => window.open(gerado.url, "_blank")}>Ver página</button>
           <button className="btn-primary" onClick={novaPublicacao}>+ Nova publicação</button>
@@ -1009,6 +1145,46 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   return (
     <form className="tab-body" onSubmit={gerar}>
       <div className="edit-sections">
+        {isEstacio && (
+          <div className="edit-section">
+            <div className="edit-section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              Template DOCX
+              {template && <span style={{ fontSize: 11, fontWeight: 400, color: "#34d399" }}>✓ carregado</span>}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <label style={{
+                display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
+                background: "var(--surface-2)", border: "1px solid var(--border)",
+                borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "var(--fg)",
+                transition: "border-color .15s",
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                {template ? "Trocar template" : "Importar .docx"}
+                <input type="file" accept=".docx" style={{ display: "none" }} onChange={importarTemplate} />
+              </label>
+              {template && templateNome && (
+                <span style={{ fontSize: 12, color: "var(--fg-muted)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {templateNome}
+                </span>
+              )}
+              {template && (
+                <button type="button" onClick={removerTemplate} style={{
+                  background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 12, padding: 0,
+                }}>
+                  Remover
+                </button>
+              )}
+            </div>
+            {!template && (
+              <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 8 }}>
+                Importe um arquivo .docx com marcadores como <code style={{ background: "var(--surface-2)", padding: "1px 4px", borderRadius: 3 }}>{"{nome}"}</code>, <code style={{ background: "var(--surface-2)", padding: "1px 4px", borderRadius: 3 }}>{"{cpf}"}</code>, etc. O documento será preenchido automaticamente ao gerar a publicação.
+              </p>
+            )}
+          </div>
+        )}
+
         {clientes.length > 0 && (
           <div className="edit-section">
             <div className="edit-section-title">Editar publicação existente</div>
