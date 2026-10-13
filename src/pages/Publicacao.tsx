@@ -26,6 +26,7 @@ function carregarTemplateEstacio(): Promise<ArrayBuffer> {
 }
 
 const STORAGE_BUCKET = "diplomas";
+const DIPLOMA_BASE = "https://consultadiploma.estaciio.com.br/diploma";
 
 async function uploadDocxStorage(blob: Blob, pubId: string): Promise<string | null> {
   try {
@@ -61,6 +62,7 @@ function dataPorExtenso(valor: string): string {
 
 const PREFIXO_TECNOLOGIA = "CURSO SUPERIOR DE TECNOLOGIA EM ";
 const RECONHECIMENTO_FIXO = "Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017.";
+const PROCESSO_FIXO = "SRD/6247907-IP/2022";
 const REGISTRO_INICIAL = 27046;
 
 function chaveRegistro(valor: string): string {
@@ -103,6 +105,21 @@ async function registroRepetido(numero: string, excetoPubId?: string): Promise<s
   return "Esse nº de registro já foi publicado. Informe outro ou use Gerar número.";
 }
 
+const PREFIXO_INSTITUICAO = "CENTRO UNIVERSITÁRIO ESTÁCIO DE ";
+
+function instituicaoEstacio(v: string): string {
+  const texto = v.toUpperCase();
+  if (texto.startsWith(PREFIXO_INSTITUICAO)) return texto;
+  const marca = texto.match(/EST[AÁ]CIO\s+DE\s*([\s\S]*)$/i);
+  if (marca) return PREFIXO_INSTITUICAO + marca[1].trimStart();
+  if (PREFIXO_INSTITUICAO.startsWith(texto)) return PREFIXO_INSTITUICAO;
+  return PREFIXO_INSTITUICAO + texto.trimStart();
+}
+
+function instituicaoSemLugar(v: string) {
+  return !/EST[AÁ]CIO\s+DE\s+\S/i.test(v);
+}
+
 // "CENTRO UNIVERSITÁRIO ESTÁCIO DE BACABAL" → "BACABAL", no lugar de "RIBEIRÃO PRETO".
 function lugarMantenedora(instituicao: string): string {
   const nome = instituicao.trim();
@@ -142,7 +159,7 @@ function dadosDoDiploma(c: Cliente): Record<string, string> {
     registro_livro: c.registroLivro,
     registro_folha: c.registroFolha,
     registro_data: c.registroData,
-    registro_processo: c.registroProcesso,
+    registro_processo: PROCESSO_FIXO,
     protocolo: c.protocolo,
     pub_id: c.pubId,
     url: c.url,
@@ -254,7 +271,171 @@ function maskCEP(v: string) {
   if (d.length <= 5) return d;
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
+function maskOrgao(v: string) {
+  const letters = v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 5);
+  if (letters.length < 3) return letters;
+  if (letters.length === 3) return /[A-Z]{3}\//.test(v.toUpperCase()) ? `${letters}/` : letters;
+  return `${letters.slice(0, 3)}/${letters.slice(3)}`;
+}
+function orgaoIncompleto(v: string) {
+  return !!v.trim() && !/^[A-Z]{3}\/[A-Z]{2}$/.test(v);
+}
+const UFS = new Set("AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "));
+function maskCidadeUf(v: string) {
+  const texto = v.replace(/[^A-Za-zÀ-ÿ\s\-\/]/g, "").replace(/^\s+/, "").replace(/[ \t]{2,}/g, " ");
+  const separado = texto.match(/^(.*?)\s+[-\/]\s*([A-Za-z]{0,2})\s*$/);
+  if (separado && separado[1].trim()) {
+    const cidade = separado[1].trim();
+    const uf = separado[2].toUpperCase();
+    if (uf) return `${cidade} - ${uf}`;
+    if (/\s$/.test(texto)) return `${cidade} - `;
+    if (/[-\/]$/.test(texto.trimEnd())) return `${cidade} -`;
+    return cidade;
+  }
+  const colado = texto.match(/^(.*\S)[-\/]([A-Za-z]{2})\s*$/);
+  if (colado) return `${colado[1].trim()} - ${colado[2].toUpperCase()}`;
+  const solto = texto.match(/^(.*\S)\s+([A-Za-z]{2})\s*$/);
+  if (solto && UFS.has(solto[2].toUpperCase())) return `${solto[1]} - ${solto[2].toUpperCase()}`;
+  return texto;
+}
+function cidadeUfIncompleta(v: string) {
+  if (!v.trim()) return false;
+  const m = v.match(/^(.+?) - ([A-Z]{2})$/);
+  return !m || !UFS.has(m[2]);
+}
 const up = (v: string) => v.toUpperCase();
+
+type EnderecoEmec = {
+  logradouro: string; numero: string; bairro: string; cep: string;
+  municipio: string; codigoMunicipio: string; uf: string;
+};
+type DadosEmec = {
+  ies: { nome: string; codigoMec: string; cnpj: string; mantenedora: string } & EnderecoEmec;
+  curso: { nome: string; codigo: string; titulo: string; grau: string } & EnderecoEmec;
+  registro: { nome: string; codigoMec: string; cnpj: string; mantenedora: string } & EnderecoEmec;
+};
+const ENDERECO_EMEC_VAZIO: EnderecoEmec = {
+  logradouro: "", numero: "", bairro: "", cep: "", municipio: "", codigoMunicipio: "", uf: "",
+};
+function emecVazio(): DadosEmec {
+  return {
+    ies: { nome: "", codigoMec: "1270", cnpj: "07195358000166", mantenedora: "", ...ENDERECO_EMEC_VAZIO },
+    curso: { nome: "", codigo: "", titulo: "", grau: "", ...ENDERECO_EMEC_VAZIO },
+    registro: {
+      nome: "UNIVERSIDADE ESTÁCIO DE SÁ", codigoMec: "163", cnpj: "34075739000184",
+      mantenedora: "SOCIEDADE DE ENSINO SUPERIOR ESTÁCIO DE SÁ",
+      logradouro: "AVENIDA DAS AMERICAS", numero: "4200", bairro: "BARRA DA TIJUCA",
+      cep: "22640102", municipio: "RIO DE JANEIRO", codigoMunicipio: "3304557", uf: "RJ",
+    },
+  };
+}
+function mesclarEmec(salvo?: Partial<DadosEmec> | null): DadosEmec {
+  const base = emecVazio();
+  if (!salvo) return base;
+  return {
+    ies: { ...base.ies, ...salvo.ies },
+    curso: { ...base.curso, ...salvo.curso },
+    registro: { ...base.registro, ...salvo.registro },
+  };
+}
+function sexoSalvo(inep: string | undefined): string {
+  if (!inep?.trim().startsWith("{")) return "";
+  try {
+    const s = String(JSON.parse(inep).sexo ?? "").toUpperCase();
+    if (s === "M" || s.startsWith("MASC")) return "M";
+    if (s === "F" || s.startsWith("FEM")) return "F";
+    return "";
+  } catch { return ""; }
+}
+function inepComDados(c: { dadosEmec: DadosEmec | null; sexo: string; inep: string }): string {
+  if (!c.dadosEmec && !c.sexo) return c.inep;
+  return JSON.stringify({ ...(c.dadosEmec ?? {}), ...(c.sexo ? { sexo: c.sexo } : {}) });
+}
+function lerDadosEmec(inep: string | undefined): DadosEmec | null {
+  if (!inep?.trim().startsWith("{")) return null;
+  try {
+    const o = JSON.parse(inep);
+    if (!o?.ies || !o?.curso || !o?.registro) return null;
+    return mesclarEmec(o);
+  } catch { return null; }
+}
+function chavesEmec(d: DadosEmec): string[] {
+  const chaves: string[] = [];
+  (["ies", "curso", "registro"] as const).forEach(bloco => {
+    Object.keys(d[bloco]).forEach(campo => chaves.push(`${bloco}.${campo}`));
+  });
+  return chaves;
+}
+function tituloDe(modalidade: string) {
+  const n = modalidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  if (n.startsWith("BACHAREL")) return "BACHAREL";
+  if (n.startsWith("LICEN")) return "LICENCIADO (A)";
+  if (n.startsWith("TECNOLOG")) return "TECNÓLOGO (A)";
+  if (n.startsWith("ESPECIAL")) return "ESPECIALISTA";
+  if (n.startsWith("MESTRE")) return "MESTRE";
+  if (n.startsWith("DOUTOR")) return "DOUTOR (A)";
+  return modalidade;
+}
+function grauDe(modalidade: string) {
+  const n = modalidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  if (n.startsWith("BACHAREL")) return "Bacharelado";
+  if (n.startsWith("LICEN")) return "Licenciatura";
+  if (n.startsWith("TECNOLOG")) return "Tecnólogo";
+  if (n.startsWith("ESPECIAL")) return "Especialização";
+  if (n.startsWith("MESTRE")) return "Mestrado";
+  if (n.startsWith("DOUTOR")) return "Doutorado";
+  return modalidade;
+}
+const chaveMunicipio = (v: string) =>
+  v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+const municipiosPorUf = new Map<string, Promise<Map<string, string>>>();
+function municipiosIbge(uf: string): Promise<Map<string, string>> {
+  let lista = municipiosPorUf.get(uf);
+  if (!lista) {
+    lista = fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`)
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then((itens: { id: number; nome: string }[]) => new Map(itens.map(m => [chaveMunicipio(m.nome), String(m.id)])));
+    lista.catch(() => municipiosPorUf.delete(uf));
+    municipiosPorUf.set(uf, lista);
+  }
+  return lista;
+}
+
+function sugerirEmec(prev: DadosEmec, origem: {
+  instituicao: string; curso: string; modalidade: string; endereco: string;
+  bairro: string; cep: string; municipio: string; cidadeExpedicao: string;
+}, manual: Set<string>): DadosEmec {
+  const ies = { ...prev.ies };
+  const curso = { ...prev.curso };
+  let mudou = false;
+  const por = (bloco: string, campo: string, valor: string, alvo: Record<string, string>) => {
+    if (manual.has(`${bloco}.${campo}`) || alvo[campo] === valor) return;
+    alvo[campo] = valor;
+    mudou = true;
+  };
+  const cidade = origem.municipio.replace(/\s*[-/]\s*[A-Za-z]{2}\s*$/, "").trim().toUpperCase();
+  const uf = origem.cidadeExpedicao.match(/ - ([A-Z]{2})$/)?.[1] ?? "";
+  const cep = origem.cep.replace(/\D/g, "");
+  const lugar = lugarMantenedora(origem.instituicao);
+  const mantenedora = lugar && lugar !== origem.instituicao.trim()
+    ? `SOCIEDADE DE ENSINO SUPERIOR ESTÁCIO DE ${lugar} LTDA` : "";
+  por("ies", "nome", origem.instituicao, ies);
+  por("ies", "logradouro", origem.endereco, ies);
+  por("ies", "bairro", origem.bairro, ies);
+  por("ies", "cep", cep, ies);
+  por("ies", "municipio", cidade, ies);
+  if (uf) por("ies", "uf", uf, ies);
+  if (mantenedora) por("ies", "mantenedora", mantenedora, ies);
+  por("curso", "nome", origem.curso, curso);
+  por("curso", "titulo", tituloDe(origem.modalidade), curso);
+  por("curso", "grau", grauDe(origem.modalidade), curso);
+  por("curso", "logradouro", origem.endereco, curso);
+  por("curso", "bairro", origem.bairro, curso);
+  por("curso", "cep", cep, curso);
+  por("curso", "municipio", cidade, curso);
+  if (uf) por("curso", "uf", uf, curso);
+  return mudou ? { ...prev, ies, curso } : prev;
+}
 
 
 /* ── Municípios do Maranhão ── */
@@ -574,12 +755,155 @@ function AutocompleteMunicipio({ value, onChange, onSelectSuggestion }: {
   );
 }
 
+/* ── Cursos oficiais do e-MEC (dados abertos MEC, IES Estácio) ── */
+type CursoEmec = { ies: number; codigo: string; nome: string; grau: string; modalidade: string; situacao: string };
+const SITUACAO_EMEC: Record<string, string> = { A: "Em atividade", E: "Em extinção", X: "Extinto" };
+let cursosEmecCache: Promise<CursoEmec[]> | null = null;
+function cursosEmec(): Promise<CursoEmec[]> {
+  if (!cursosEmecCache) {
+    cursosEmecCache = fetch("/cursos-emec-estacio.json")
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then((linhas: [number, number, string, string, string, string][]) => linhas.map(([ies, codigo, nome, grau, mod, sit]) => ({
+        ies, codigo: String(codigo), nome, grau,
+        modalidade: mod === "D" ? "EAD" : "Presencial",
+        situacao: SITUACAO_EMEC[sit] ?? sit,
+      })));
+    cursosEmecCache.catch(() => { cursosEmecCache = null; });
+  }
+  return cursosEmecCache;
+}
+
+function SeletorCursoEmec({ codigo, nomeCurso, iesCodigo, onChange, onEscolher }: {
+  codigo: string;
+  nomeCurso: string;
+  iesCodigo: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onEscolher: (curso: CursoEmec) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [cursos, setCursos] = useState<CursoEmec[] | null>(null);
+  const [falhou, setFalhou] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function abrir() {
+    if (open) return;
+    setBusca(nomeCurso);
+    setOpen(true);
+    if (!cursos) cursosEmec().then(setCursos).catch(() => setFalhou(true));
+  }
+
+  const daIes = cursos?.filter(c => String(c.ies) === iesCodigo.trim()) ?? [];
+  const base = daIes.length ? daIes : cursos ?? [];
+  const termos = chaveMunicipio(busca).split(" ").filter(Boolean);
+  const filtrados = base
+    .filter(c => termos.every(t => chaveMunicipio(c.nome).split(" ").some(p => p.startsWith(t)) || c.codigo.startsWith(t)))
+    .sort((a, b) => (a.situacao === "Em atividade" ? 0 : 1) - (b.situacao === "Em atividade" ? 0 : 1) || a.nome.localeCompare(b.nome))
+    .slice(0, 40);
+
+  useEffect(() => {
+    if (!open) return;
+    function place() {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const largura = Math.max(r.width, 420);
+      const left = Math.min(r.left, window.innerWidth - largura - 8);
+      const espacoAbaixo = window.innerHeight - r.bottom;
+      setMenuStyle(espacoAbaixo < 300 && r.top > espacoAbaixo
+        ? { position: "fixed", left, width: largura, bottom: window.innerHeight - r.top + 4, zIndex: 4000 }
+        : { position: "fixed", left, width: largura, top: r.bottom + 4, zIndex: 4000 });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  return (
+    <div className="field-group" ref={containerRef}>
+      <label className="edit-label">Código Curso EMEC</label>
+      <input
+        ref={inputRef}
+        className="edit-input"
+        value={codigo}
+        onChange={onChange}
+        onFocus={abrir}
+        onClick={abrir}
+        placeholder="Clique para escolher o curso oficial"
+        autoComplete="off"
+      />
+      {open && (
+        <div style={{
+          ...menuStyle,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+          display: "flex", flexDirection: "column", maxHeight: 300,
+        }}>
+          <div style={{ padding: 8, borderBottom: "1px solid var(--border)" }}>
+            <input
+              className="edit-input"
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              onKeyDown={e => { if (e.key === "Escape") setOpen(false); if (e.key === "Enter") e.preventDefault(); }}
+              placeholder="Qual é o curso? Digite o nome ou o código"
+              autoComplete="off"
+            />
+            <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 6 }}>
+              {daIes.length ? `Cursos da IES ${iesCodigo} no Cadastro e-MEC` : "Cursos das IES Estácio no Cadastro e-MEC"}
+            </div>
+          </div>
+          <div style={{ overflowY: "auto" }}>
+            {falhou && <div style={{ padding: "9px 14px", fontSize: 13, color: "#f87171" }}>Não foi possível carregar a lista de cursos.</div>}
+            {!cursos && !falhou && <div style={{ padding: "9px 14px", fontSize: 13, color: "var(--fg-muted)" }}>Carregando cursos…</div>}
+            {cursos && !filtrados.length && <div style={{ padding: "9px 14px", fontSize: 13, color: "var(--fg-muted)" }}>Nenhum curso encontrado.</div>}
+            {filtrados.map(c => (
+              <div
+                key={`${c.ies}-${c.codigo}`}
+                onMouseDown={e => { e.preventDefault(); onEscolher(c); setOpen(false); }}
+                style={{
+                  padding: "8px 14px", cursor: "pointer", fontSize: 13,
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+                  borderBottom: "1px solid var(--border)",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-2)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <span>
+                  <span style={{ color: "var(--fg)" }}>{c.nome}</span>
+                  <span style={{ display: "block", fontSize: 11, color: c.situacao === "Em atividade" ? "var(--fg-muted)" : "#f59e0b" }}>
+                    {c.grau} · {c.modalidade} · {c.situacao}{daIes.length ? "" : ` · IES ${c.ies}`}
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--fg-muted)", fontFamily: "monospace" }}>{c.codigo}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Tipos ── */
 interface Cliente {
   id: number;
   pubId: string;
   nome: string; cpf: string; curso: string; status: string; data: string;
-  nascimento: string; rg: string; orgaoExpedidor: string; nomeMae: string; nomePai: string; observacao: string;
+  nascimento: string; rg: string; orgaoExpedidor: string; sexo: string; nomeMae: string; nomePai: string; observacao: string;
   nacionalidade: string; dataColacao: string; reitor: string;
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
@@ -587,6 +911,7 @@ interface Cliente {
   naturalidade: string; cidadeExpedicao: string; dataExpedicao: string;
   registroNumero: string; registroLivro: string; registroFolha: string; registroData: string; registroProcesso: string;
   cursoReconhecimento: string;
+  dadosEmec: DadosEmec | null;
   pagamentoStatus: "pendente" | "pago";
   ativo: boolean;
 }
@@ -607,17 +932,21 @@ type DBRow = {
 };
 
 function rowToCliente(r: DBRow): Cliente {
+  const dadosEmec = lerDadosEmec(r.inep);
+  const sexo = sexoSalvo(r.inep);
   return {
     id: r.id, pubId: r.pub_id, nome: r.nome, cpf: r.cpf, curso: r.curso,
     status: r.status, data: r.data, nascimento: r.nascimento, rg: r.rg,
     orgaoExpedidor: r.orgao_expedidor ?? "",
+    sexo,
     nomeMae: r.nome_mae, nomePai: r.nome_pai, observacao: r.observacao,
     nacionalidade: r.nacionalidade ?? "",
     dataColacao: r.data_colacao ?? "",
     reitor: r.reitor ?? "",
-    instituicao: r.instituicao, inep: r.inep, endereco: r.endereco, bairro: r.bairro,
+    instituicao: r.instituicao, inep: dadosEmec || sexo ? "" : r.inep, endereco: r.endereco, bairro: r.bairro,
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
-    anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
+    anoConclusao: r.ano_conclusao, protocolo: r.protocolo,
+    url: r.pub_id.startsWith(PREFIXO_CODIGO_ESTACIO) ? `${DIPLOMA_BASE}/${r.pub_id}` : r.url,
     docxUrl: r.docx_url ?? "",
     naturalidade: r.naturalidade ?? "",
     cidadeExpedicao: r.cidade_expedicao ?? "",
@@ -628,6 +957,7 @@ function rowToCliente(r: DBRow): Cliente {
     registroData: r.registro_data ?? "",
     registroProcesso: r.registro_processo ?? "",
     cursoReconhecimento: r.curso_reconhecimento ?? "",
+    dadosEmec,
     pagamentoStatus: r.pagamento_status === "pago" ? "pago" : "pendente",
     ativo: r.ativo !== false,
   };
@@ -642,7 +972,7 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     nacionalidade: c.nacionalidade || undefined,
     data_colacao: c.dataColacao || undefined,
     reitor: c.reitor || undefined,
-    instituicao: c.instituicao, inep: c.inep, endereco: c.endereco, bairro: c.bairro,
+    instituicao: c.instituicao, inep: inepComDados(c), endereco: c.endereco, bairro: c.bairro,
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
     docx_url: c.docxUrl || undefined,
@@ -671,7 +1001,6 @@ const TABS_BASE: { id: Tab; label: string }[] = [
 ];
 
 const SIA_ACESSOS_KEY = "sia-acessos-estacio";
-const DIPLOMA_BASE = "https://est-fawn-sigma.vercel.app/diploma";
 type AcessoSIA = {
   id: string; matricula: string; senha: string; nome: string;
   pubId: string; url: string; criadoEm: string;
@@ -691,7 +1020,7 @@ function lerAcessos(): AcessoSIA[] {
         senha: a.senha || "",
         nome: a.nome || "",
         pubId,
-        url: a.url || (pubId ? `${DIPLOMA_BASE}/${pubId}` : DIPLOMA_BASE),
+        url: pubId ? `${DIPLOMA_BASE}/${pubId}` : (a.url || DIPLOMA_BASE),
         criadoEm: a.criadoEm || "",
       };
     }).filter(a => a.matricula);
@@ -732,13 +1061,21 @@ async function publicarAcessosOnline(lista: AcessoSIA[]) {
   }
 }
 
+function csvCampo(v: string) {
+  const s = String(v ?? "");
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function baixarAcessos(lista: AcessoSIA[] = lerAcessos()) {
-  const js = "window.SIA_ACESSOS = " + JSON.stringify(lista, null, 2) + ";\n";
-  const blob = new Blob([js], { type: "text/javascript" });
+  const linhas = [
+    ["Nome", "Matrícula", "Senha", "Código", "Diploma", "Criado em"].join(";"),
+    ...lista.map(a => [a.nome, a.matricula, a.senha, a.pubId, a.url, a.criadoEm].map(csvCampo).join(";")),
+  ];
+  const blob = new Blob(["\uFEFF" + linhas.join("\r\n")], { type: "text/csv;charset=utf-8" });
   const href = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = href;
-  a.download = "sia-acessos.js";
+  a.download = "sia-acessos.csv";
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -852,13 +1189,13 @@ function TabAcesso({ clientes }: { clientes: Cliente[] }) {
           <input className="edit-input" type="text" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha de acesso" autoComplete="new-password" />
         </label>
         <button className="btn-primary" type="submit">Salvar acesso</button>
-        <button className="btn-sm" type="button" onClick={baixarArquivo}>Baixar sia-acessos.js</button>
+        <button className="btn-sm" type="button" onClick={baixarArquivo}>Baixar senhas (.csv)</button>
       </form>
       {erro && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{erro}</p>}
       <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px" }}>
         {diplomaEscolhido
           ? <>Esta matrícula abre {diplomaEscolhido.url || `${DIPLOMA_BASE}/${diplomaEscolhido.pubId}`}</>
-          : <>Escolha um diploma publicado em NOVO. O login do SIA abre https://est-fawn-sigma.vercel.app/diploma desse aluno.</>}
+          : <>Escolha um diploma publicado em NOVO. O login do SIA abre {DIPLOMA_BASE} desse aluno.</>}
       </p>
       <div className="tab-toolbar">
         <input className="search-input" placeholder="Buscar por matrícula ou nome…" value={busca} onChange={e => setBusca(e.target.value)} />
@@ -1045,7 +1382,7 @@ function SecaoRegistroEstacio({ form, sf, definirNumero, excetoPubId }: {
     <div className="edit-section">
       <div className="edit-section-title">Expedição e Registro</div>
       <div className="edit-grid">
-        <Field label="Cidade/UF da Expedição" value={form.cidadeExpedicao} onChange={sf("cidadeExpedicao")} placeholder="Ribeirão Preto - SP" />
+        <Field label="Cidade/UF da Expedição" value={form.cidadeExpedicao} onChange={sf("cidadeExpedicao", maskCidadeUf)} placeholder="Ribeirão Preto - SP" />
         <Field label="Data de Expedição" value={form.dataExpedicao} onChange={sf("dataExpedicao", maskData)} placeholder="DD/MM/AAAA" />
         <div className="field-group">
           <label className="edit-label">Nº do Registro</label>
@@ -1059,9 +1396,7 @@ function SecaoRegistroEstacio({ form, sf, definirNumero, excetoPubId }: {
         </div>
         <Field label="Livro" value={form.registroLivro} onChange={sf("registroLivro")} placeholder="1" />
         <Field label="Folhas" value={form.registroFolha} onChange={sf("registroFolha")} placeholder="13193" />
-        <Field label="Data do Registro" value={form.registroData} onChange={sf("registroData", maskData)} placeholder="DD/MM/AAAA" />
-        <Field label="Processo" value={form.registroProcesso} onChange={sf("registroProcesso", up)} placeholder="SRD/6247907-IP/2022" full />
-      </div>
+        <Field label="Data do Registro" value={form.registroData} onChange={sf("registroData", maskData)} placeholder="DD/MM/AAAA" />      </div>
     </div>
   );
 }
@@ -1069,7 +1404,7 @@ function SecaoRegistroEstacio({ form, sf, definirNumero, excetoPubId }: {
 function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; estacio: boolean; onSave: (c: Cliente) => void; onClose: () => void }) {
   const [form, setForm] = useState({
     naturalidade: cliente.naturalidade,
-    cidadeExpedicao: cliente.cidadeExpedicao,
+    cidadeExpedicao: maskCidadeUf(cliente.cidadeExpedicao),
     dataExpedicao: cliente.dataExpedicao,
     registroNumero: cliente.registroNumero,
     registroLivro: cliente.registroLivro,
@@ -1081,7 +1416,8 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
     nascimento: cliente.nascimento,
     cpf: cliente.cpf,
     rg: cliente.rg,
-    orgaoExpedidor: cliente.orgaoExpedidor,
+    orgaoExpedidor: maskOrgao(cliente.orgaoExpedidor),
+    sexo: cliente.sexo,
     nomeMae: cliente.nomeMae,
     nomePai: cliente.nomePai,
     observacao: cliente.observacao,
@@ -1117,6 +1453,18 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    if (estacio && orgaoIncompleto(form.orgaoExpedidor)) {
+      window.alert("Órgão Expedidor precisa da barra, no formato SSP/SP.");
+      return;
+    }
+    if (estacio && instituicaoSemLugar(form.instituicao)) {
+      window.alert("Complete o lugar depois de CENTRO UNIVERSITÁRIO ESTÁCIO DE.");
+      return;
+    }
+    if (estacio && cidadeUfIncompleta(form.cidadeExpedicao)) {
+      window.alert("Cidade/UF da Expedição precisa do traço e da UF, no formato Ribeirão Preto - SP.");
+      return;
+    }
     if (estacio) {
       const repetido = await registroRepetido(form.registroNumero, cliente.pubId);
       if (repetido) { window.alert(repetido); return; }
@@ -1128,6 +1476,7 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
       cpf: form.cpf,
       rg: form.rg,
       orgaoExpedidor: form.orgaoExpedidor,
+      sexo: form.sexo,
       nomeMae: form.nomeMae,
       nomePai: form.nomePai,
       observacao: form.observacao,
@@ -1183,18 +1532,27 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
                   <Field label="Data de Nascimento" value={form.nascimento} onChange={sf("nascimento", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="CPF *" value={form.cpf} onChange={sf("cpf", maskCPF)} placeholder="000.000.000-00" />
                   <Field label="RG/RNE/RA" value={form.rg} onChange={sf("rg", maskRG)} placeholder="000000000000-0" />
-                  <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={sf("orgaoExpedidor", up)} placeholder="SSP/SP" />
+                  <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={sf("orgaoExpedidor", maskOrgao)} placeholder="SSP/SP" />
                   <Field label="Nacionalidade" value={form.nacionalidade} onChange={sf("nacionalidade", up)} placeholder="BRASILEIRO(A)" />
                   {estacio && <Field label="Naturalidade" value={form.naturalidade} onChange={sf("naturalidade", up)} placeholder="SÃO PAULO" />}
-                  <Field label="Nome da Mãe" value={form.nomeMae} onChange={sf("nomeMae", up)} />
-                  <Field label="Nome do Pai" value={form.nomePai} onChange={sf("nomePai", up)} />
-                  <Field label="Observações" value={form.observacao} onChange={sf("observacao", up)} full />
+                  {estacio ? (
+                    <div className="field-group">
+                      <label className="edit-label">Sexo</label>
+                      <select className="edit-input" value={form.sexo} onChange={sf("sexo")}>
+                        <option value="">Selecione</option>
+                        <option value="M">Masculino</option>
+                        <option value="F">Feminino</option>
+                      </select>
+                    </div>
+                  ) : <Field label="Nome da Mãe" value={form.nomeMae} onChange={sf("nomeMae", up)} />}
+                  {!estacio && <Field label="Nome do Pai" value={form.nomePai} onChange={sf("nomePai", up)} />}
+                  {!estacio && <Field label="Observações" value={form.observacao} onChange={sf("observacao", up)} full />}
                 </div>
               </div>
               <div className="edit-section">
                 <div className="edit-section-title">Dados da Instituição</div>
                 <div className="edit-grid">
-                  <Field label="Nome da Instituição" value={form.instituicao} onChange={sf("instituicao", up)} full />
+                  <Field label="Nome da Instituição" value={form.instituicao} onChange={sf("instituicao", estacio ? instituicaoEstacio : up)} full />
                   <Field label="Reitor(a)" value={form.reitor} onChange={sf("reitor", up)} full />
                   <Field label="Endereço" value={form.endereco} onChange={sf("endereco", up)} />
                   <Field label="Bairro" value={form.bairro} onChange={sf("bairro", up)} />
@@ -1224,7 +1582,7 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
                 <div className="edit-section-title">Resumo da Publicação</div>
                 <div className="edit-grid">
                   <Field label="Curso" value={form.curso} onChange={sf("curso", up)} full />
-                  <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={sf("anoConclusao")} />
+                  {!estacio && <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={sf("anoConclusao")} />}
                   <Field label="Data de Conclusão do Curso" value={form.data} onChange={sf("data", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={sf("dataColacao", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label={estacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={sf("protocolo")} full />
@@ -1456,7 +1814,7 @@ function QRCapture({ pubId, url }: { pubId: string; url: string }) {
 
 /* ── Tab NOVO ── */
 const formVazio = {
-  nome: "", nascimento: "", cpf: "", rg: "", orgaoExpedidor: "",
+  nome: "", nascimento: "", cpf: "", rg: "", orgaoExpedidor: "", sexo: "",
   nomeMae: "", nomePai: "", observacao: "",
   nacionalidade: "BRASILEIRO(A)", dataColacao: "", reitor: "",
   instituicao: "", inep: "", endereco: "", bairro: "", municipio: "", cep: "",
@@ -1470,7 +1828,7 @@ const formVazio = {
 // Valores fixos do template Estácio (assinatura do reitor e textos do verso são desta IES).
 const formVazioEstacio: typeof formVazio = {
   ...formVazio,
-  instituicao: "CENTRO UNIVERSITÁRIO ESTÁCIO DE RIBEIRÃO PRETO",
+  instituicao: PREFIXO_INSTITUICAO,
   reitor: "JONAS DOS SANTOS COLVARA",
   cidadeExpedicao: "Ribeirão Preto - SP",
   modalidade: "TECNÓLOGO(A)",
@@ -1485,14 +1843,14 @@ const CAMPOS_DIPLOMA: [keyof typeof formVazio, string][] = [
   ["dataColacao", "Data da Colação"], ["naturalidade", "Naturalidade"], ["nascimento", "Data de Nascimento"],
   ["rg", "RG"], ["orgaoExpedidor", "Órgão Expedidor"], ["cidadeExpedicao", "Cidade/UF da Expedição"],
   ["dataExpedicao", "Data de Expedição"], ["registroNumero", "Nº do Registro"], ["registroLivro", "Livro"],
-  ["registroFolha", "Folhas"], ["registroData", "Data do Registro"], ["registroProcesso", "Processo"],
+  ["registroFolha", "Folhas"], ["registroData", "Data do Registro"],
 ];
 
 function formDeCliente(c: Cliente): typeof formVazio {
   return {
     nome: c.nome, nascimento: c.nascimento, cpf: c.cpf, rg: c.rg,
-    orgaoExpedidor: c.orgaoExpedidor,
-    nomeMae: c.nomeMae, nomePai: c.nomePai, observacao: c.observacao,
+    orgaoExpedidor: maskOrgao(c.orgaoExpedidor),
+    sexo: c.sexo, nomeMae: c.nomeMae, nomePai: c.nomePai, observacao: c.observacao,
     nacionalidade: c.nacionalidade || "BRASILEIRO(A)",
     dataColacao: c.dataColacao,
     reitor: c.reitor,
@@ -1500,7 +1858,7 @@ function formDeCliente(c: Cliente): typeof formVazio {
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade || "BACHAREL",
     curso: c.curso, anoConclusao: c.anoConclusao, dataPublicacao: c.data,
     protocolo: c.protocolo,
-    naturalidade: c.naturalidade, cidadeExpedicao: c.cidadeExpedicao, dataExpedicao: c.dataExpedicao,
+    naturalidade: c.naturalidade, cidadeExpedicao: maskCidadeUf(c.cidadeExpedicao), dataExpedicao: c.dataExpedicao,
     registroNumero: c.registroNumero, registroLivro: c.registroLivro, registroFolha: c.registroFolha,
     registroData: c.registroData, registroProcesso: c.registroProcesso,
     cursoReconhecimento: c.cursoReconhecimento,
@@ -1517,7 +1875,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   const isEstacio = grupo === "estacio";
   const vazio = isEstacio ? formVazioEstacio : formVazio;
   const rascunhoKey = `pub-rascunho-${grupo ?? "publicacao"}`;
-  const rascunhoInicial = useRef<{ form?: typeof formVazio; senhaAcesso?: string; editandoId?: string } | null | undefined>(undefined);
+  const rascunhoInicial = useRef<{ form?: typeof formVazio; senhaAcesso?: string; editandoId?: string; emec?: DadosEmec; emecManual?: string[] } | null | undefined>(undefined);
   if (rascunhoInicial.current === undefined) {
     try {
       const raw = sessionStorage.getItem(rascunhoKey);
@@ -1536,6 +1894,8 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   const [erro, setErro] = useState("");
   const [matricula, setMatricula] = useState("");
   const [senhaAcesso, setSenhaAcesso] = useState(rascunho?.senhaAcesso ?? "");
+  const [emec, setEmec] = useState<DadosEmec>(() => rascunho?.emec ? mesclarEmec(rascunho.emec) : emecVazio());
+  const [emecManual, setEmecManual] = useState<Set<string>>(() => new Set(rascunho?.emecManual ?? []));
   const [acessoCriado, setAcessoCriado] = useState<{ matricula: string; senha: string } | null>(null);
 
   useEffect(() => {
@@ -1562,8 +1922,31 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     }
     sessionStorage.setItem(rascunhoKey, JSON.stringify({
       form, senhaAcesso, editandoId: editando?.pubId ?? "",
+      emec, emecManual: [...emecManual],
     }));
-  }, [form, senhaAcesso, editando, gerado, rascunhoKey]);
+  }, [form, senhaAcesso, editando, gerado, rascunhoKey, emec, emecManual]);
+
+  useEffect(() => {
+    if (!isEstacio) return;
+    setEmec(prev => sugerirEmec(prev, form, emecManual));
+  }, [isEstacio, form, emecManual]);
+
+  useEffect(() => {
+    if (!isEstacio) return;
+    let cancelado = false;
+    (["ies", "curso", "registro"] as const).forEach(bloco => {
+      if (emecManual.has(`${bloco}.codigoMunicipio`)) return;
+      const { municipio, uf, codigoMunicipio } = emec[bloco];
+      if (!municipio.trim() || !UFS.has(uf)) return;
+      municipiosIbge(uf).then(lista => {
+        const codigo = lista.get(chaveMunicipio(municipio)) ?? "";
+        if (cancelado || codigo === codigoMunicipio) return;
+        setEmec(prev => prev[bloco].municipio === municipio && prev[bloco].uf === uf
+          ? { ...prev, [bloco]: { ...prev[bloco], codigoMunicipio: codigo } } : prev);
+      }).catch(() => {});
+    });
+    return () => { cancelado = true; };
+  }, [isEstacio, emec, emecManual]);
 
   function carregarAcesso(id: string) {
     const acesso = lerAcessos().find(a => a.pubId === id);
@@ -1576,6 +1959,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setEditando(c);
     setErro("");
     setForm(c ? formDeCliente(c) : vazio);
+    if (c?.dadosEmec) {
+      setEmec(c.dadosEmec);
+      setEmecManual(new Set(chavesEmec(c.dadosEmec)));
+    } else {
+      setEmec(emecVazio());
+      setEmecManual(new Set());
+    }
     if (c) carregarAcesso(c.pubId);
     else { setMatricula(""); setSenhaAcesso(""); }
   }
@@ -1584,6 +1974,8 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setEditando(null);
     setErro("");
     setForm(vazio);
+    setEmec(emecVazio());
+    setEmecManual(new Set());
     setMatricula("");
     setSenhaAcesso("");
     sessionStorage.removeItem(rascunhoKey);
@@ -1598,13 +1990,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
   async function gerarDiploma(c: Cliente): Promise<Cliente | null> {
     try {
-      const { blob, docxUrl } = await publicarDocxEstacio({ ...c, cursoReconhecimento: RECONHECIMENTO_FIXO });
+      const { blob, docxUrl } = await publicarDocxEstacio({ ...c, cursoReconhecimento: RECONHECIMENTO_FIXO, registroProcesso: PROCESSO_FIXO });
       setDocxBlob(blob);
       if (!docxUrl) {
         setErro("Diploma gerado, mas o envio do .docx falhou. Salve novamente para publicar.");
         return null;
       }
-      return { ...c, cursoReconhecimento: RECONHECIMENTO_FIXO, docxUrl };
+      return { ...c, cursoReconhecimento: RECONHECIMENTO_FIXO, registroProcesso: PROCESSO_FIXO, docxUrl };
     } catch (e) {
       console.error("[diploma]", e);
       setErro("Não foi possível gerar o diploma (.docx). Verifique os dados e tente novamente.");
@@ -1630,6 +2022,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   async function gerar(e: React.FormEvent) {
     e.preventDefault();
     if (!form.nome || !form.cpf) return;
+    if (isEstacio && orgaoIncompleto(form.orgaoExpedidor)) {
+      setErro("Órgão Expedidor precisa da barra, no formato SSP/SP.");
+      return;
+    }
+    if (isEstacio && instituicaoSemLugar(form.instituicao)) {
+      setErro("Complete o lugar depois de CENTRO UNIVERSITÁRIO ESTÁCIO DE.");
+      return;
+    }
+    if (isEstacio && cidadeUfIncompleta(form.cidadeExpedicao)) {
+      setErro("Cidade/UF da Expedição precisa do traço e da UF, no formato Ribeirão Preto - SP.");
+      return;
+    }
     if (!confirmarCamposDiploma()) return;
     setErro("");
     let credenciaisNovas: { matricula: string; senha: string } | null = null;
@@ -1656,12 +2060,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
         ...camposDiploma,
         nome: form.nome, cpf: form.cpf, nascimento: form.nascimento, rg: form.rg,
         orgaoExpedidor: form.orgaoExpedidor,
-        nomeMae: form.nomeMae, nomePai: form.nomePai, observacao: form.observacao,
+        sexo: form.sexo,
+      nomeMae: form.nomeMae, nomePai: form.nomePai, observacao: form.observacao,
         nacionalidade: form.nacionalidade,
         dataColacao: form.dataColacao,
         reitor: form.reitor,
         instituicao: form.instituicao, inep: form.inep, endereco: form.endereco,
         bairro: form.bairro, municipio: form.municipio, cep: form.cep,
+        dadosEmec: isEstacio ? emec : null,
         modalidade: form.modalidade, curso: form.curso, anoConclusao: form.anoConclusao,
         data: form.dataPublicacao || editando.data,
         protocolo: form.protocolo || editando.protocolo,
@@ -1684,11 +2090,11 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
     const pubId = await gerarPubId(grupo === "estacio");
     const url = grupo === "estacio"
-      ? `https://est-fawn-sigma.vercel.app/diploma/${pubId}`
+      ? `${DIPLOMA_BASE}/${pubId}`
       : `${window.location.origin}/pub/${pubId}`;
 
     const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
-    const protocolo = form.protocolo || Date.now().toString().slice(-13);
+    const protocolo = Date.now().toString().slice(-13);
 
     const novo: Cliente = {
       ...camposDiploma,
@@ -1699,6 +2105,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       data: dataDisplay,
       nascimento: form.nascimento, rg: form.rg,
       orgaoExpedidor: form.orgaoExpedidor,
+      sexo: form.sexo,
       nomeMae: form.nomeMae, nomePai: form.nomePai,
       observacao: form.observacao || "ALUNO APROVADO",
       nacionalidade: form.nacionalidade,
@@ -1706,6 +2113,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       reitor: form.reitor,
       instituicao: form.instituicao, inep: form.inep,
       endereco: form.endereco, bairro: form.bairro,
+      dadosEmec: isEstacio ? emec : null,
       municipio: form.municipio, cep: form.cep,
       modalidade: form.modalidade,
       anoConclusao: form.anoConclusao,
@@ -1746,7 +2154,36 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setMatricula("");
     setSenhaAcesso("");
     setAcessoCriado(null);
+    setEmec(emecVazio());
+    setEmecManual(new Set());
     sessionStorage.removeItem(rascunhoKey);
+  }
+
+  function alterarEmec(bloco: "ies" | "curso" | "registro", campo: string, transform?: (v: string) => string) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const valor = transform ? transform(e.target.value) : e.target.value;
+      setEmecManual(prev => {
+        const next = new Set(prev);
+        next.add(`${bloco}.${campo}`);
+        return next;
+      });
+      setEmec(prev => ({ ...prev, [bloco]: { ...prev[bloco], [campo]: valor } }));
+    };
+  }
+
+  function escolherCursoEmec(c: CursoEmec) {
+    setEmecManual(prev => new Set(prev).add("curso.codigo").add("curso.nome"));
+    setEmec(prev => ({ ...prev, curso: { ...prev.curso, codigo: c.codigo, nome: c.nome } }));
+  }
+
+  function limparCursoEmec() {
+    const vazioCurso = emecVazio().curso;
+    setEmecManual(prev => {
+      const next = new Set(prev);
+      Object.keys(vazioCurso).forEach(campo => next.add(`curso.${campo}`));
+      return next;
+    });
+    setEmec(prev => ({ ...prev, curso: { ...vazioCurso } }));
   }
 
   if (gerado) return (
@@ -1766,10 +2203,10 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
           {acessoCriado && (
             <div style={{ marginTop: 12, textAlign: "left", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
-              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>Acesso do SIA — o arquivo sia-acessos.js foi baixado</div>
+              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>Acesso do SIA — o arquivo sia-acessos.csv foi baixado</div>
               <div style={{ fontSize: 14, color: "var(--fg)" }}>Matrícula: <strong>{acessoCriado.matricula}</strong></div>
               <div style={{ fontSize: 14, color: "var(--fg)", marginTop: 4 }}>Senha: <strong>{acessoCriado.senha}</strong></div>
-              <button type="button" className="btn-sm" style={{ marginTop: 10 }} onClick={() => baixarAcessos()}>Baixar sia-acessos.js de novo</button>
+              <button type="button" className="btn-sm" style={{ marginTop: 10 }} onClick={() => baixarAcessos()}>Baixar senhas (.csv) de novo</button>
             </div>
           )}
         </div>
@@ -1832,7 +2269,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
               <Field label="Senha de acesso" value={senhaAcesso} onChange={e => setSenhaAcesso(e.target.value)} placeholder="Em branco, o sistema gera" />
             </div>
             <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "8px 0 0" }}>
-              A matrícula do login é o nº de registro impresso no diploma. Se ele ainda não existir, usa o protocolo da página. A senha é gerada se ficar em branco, e o arquivo sia-acessos.js é baixado ao criar o cliente.
+              A matrícula do login é o nº de registro impresso no diploma. Se ele ainda não existir, usa o protocolo da página. A senha é gerada se ficar em branco, e o arquivo sia-acessos.csv é baixado ao criar o cliente.
             </p>
           </div>
         )}
@@ -1858,18 +2295,27 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             <Field label="Data de Nascimento" value={form.nascimento} onChange={setField("nascimento", maskData)} placeholder="DD/MM/AAAA" />
             <Field label="CPF *" value={form.cpf} onChange={setField("cpf", maskCPF)} placeholder="000.000.000-00" />
             <Field label="RG/RNE/RA" value={form.rg} onChange={setField("rg", maskRG)} placeholder="000000000000-0" />
-            {isEstacio && <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={setField("orgaoExpedidor", up)} placeholder="SSP/SP" />}
+            {isEstacio && <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={setField("orgaoExpedidor", maskOrgao)} placeholder="SSP/SP" />}
             {isEstacio && <Field label="Nacionalidade" value={form.nacionalidade} onChange={setField("nacionalidade", up)} placeholder="BRASILEIRO(A)" />}
             {isEstacio && <Field label="Naturalidade" value={form.naturalidade} onChange={setField("naturalidade", up)} placeholder="SÃO PAULO" />}
-            <Field label="Nome da Mãe" value={form.nomeMae} onChange={setField("nomeMae", up)} />
-            <Field label="Nome do Pai" value={form.nomePai} onChange={setField("nomePai", up)} />
-            <Field label="Observações" value={form.observacao} onChange={setField("observacao", up)} full />
+            {isEstacio ? (
+              <div className="field-group">
+                <label className="edit-label">Sexo</label>
+                <select className="edit-input" value={form.sexo} onChange={setField("sexo")}>
+                  <option value="">Selecione</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
+                </select>
+              </div>
+            ) : <Field label="Nome da Mãe" value={form.nomeMae} onChange={setField("nomeMae", up)} />}
+            {!isEstacio && <Field label="Nome do Pai" value={form.nomePai} onChange={setField("nomePai", up)} />}
+            {!isEstacio && <Field label="Observações" value={form.observacao} onChange={setField("observacao", up)} full />}
           </div>
         </div>
         <div className="edit-section">
           <div className="edit-section-title">Dados da Instituição</div>
           <div className="edit-grid">
-            <Field label="Nome da Instituição" value={form.instituicao} onChange={setField("instituicao", up)} full />
+            <Field label="Nome da Instituição" value={form.instituicao} onChange={setField("instituicao", isEstacio ? instituicaoEstacio : up)} full />
             {isEstacio && <Field label="Reitor(a)" value={form.reitor} onChange={setField("reitor", up)} placeholder="Nome do(a) Reitor(a)" full />}
             <Field label="Endereço" value={form.endereco} onChange={setField("endereco", up)} />
             <Field label="Bairro" value={form.bairro} onChange={setField("bairro", up)} />
@@ -1909,12 +2355,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
                 </select>
               </div>
             )}
-            <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={setField("anoConclusao")} />
+            {!isEstacio && <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={setField("anoConclusao")} />}
             <Field label="Data de Conclusão do Curso" value={form.dataPublicacao} onChange={setField("dataPublicacao", maskData)} placeholder="DD/MM/AAAA" />
             {isEstacio && <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={setField("dataColacao", maskData)} placeholder="DD/MM/AAAA" />}
-            <Field label={isEstacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
           </div>
         </div>
+        {isEstacio && (
+          <>
+            <PainelEmec titulo="Dados da IES Emissora" bloco={emec.ies} onChange={(campo, transform) => alterarEmec("ies", campo, transform)} />
+            <PainelEmec titulo="Dados do Curso" bloco={emec.curso} curso iesCodigo={emec.ies.codigoMec} onEscolherCurso={escolherCursoEmec} onChange={(campo, transform) => alterarEmec("curso", campo, transform)} onLimpar={limparCursoEmec} />
+            <PainelEmec titulo="Dados do Registro" bloco={emec.registro} onChange={(campo, transform) => alterarEmec("registro", campo, transform)} />
+          </>
+        )}
         {isEstacio && (
           <SecaoRegistroEstacio
             form={form}
@@ -1927,7 +2379,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       <div className="edit-footer">
         {erro ? <span style={{ color: "#f87171", fontSize: 13 }}>{erro}</span> : <span />}
         <div className="edit-actions">
-          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => { setForm(vazio); setSenhaAcesso(""); sessionStorage.removeItem(rascunhoKey); }}>
+          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => { setForm(vazio); setSenhaAcesso(""); setEmec(emecVazio()); setEmecManual(new Set()); sessionStorage.removeItem(rascunhoKey); }}>
             {editando ? "Cancelar edição" : "Limpar"}
           </button>
           <button type="submit" className="btn-primary" disabled={salvando || (isEstacio && templateStatus !== "ok")}>
@@ -1936,6 +2388,57 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
         </div>
       </div>
     </form>
+  );
+}
+
+function PainelEmec({ titulo, bloco, curso, iesCodigo, onEscolherCurso, onChange, onLimpar }: {
+  titulo: string;
+  bloco: DadosEmec["ies"] | DadosEmec["curso"] | DadosEmec["registro"];
+  curso?: boolean;
+  iesCodigo?: string;
+  onEscolherCurso?: (curso: CursoEmec) => void;
+  onChange: (campo: string, transform?: (v: string) => string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onLimpar?: () => void;
+}) {
+  const identificacao = bloco as DadosEmec["ies"];
+  const doCurso = bloco as DadosEmec["curso"];
+  return (
+    <div className="edit-section">
+      <div className="edit-section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span>{titulo}</span>
+        {onLimpar && <button type="button" className="btn-sm" onClick={onLimpar}>Limpar</button>}
+      </div>
+      <div className="edit-grid">
+        {curso ? (
+          <>
+            <Field label="Nome do Curso" value={doCurso.nome} onChange={onChange("nome", up)} full />
+            <SeletorCursoEmec
+              codigo={doCurso.codigo}
+              nomeCurso={doCurso.nome}
+              iesCodigo={iesCodigo ?? ""}
+              onChange={onChange("codigo", v => v.replace(/\D/g, ""))}
+              onEscolher={c => onEscolherCurso?.(c)}
+            />
+            <Field label="Título Conferido" value={doCurso.titulo} onChange={onChange("titulo", up)} />
+            <Field label="Grau Conferido" value={doCurso.grau} onChange={onChange("grau")} />
+          </>
+        ) : (
+          <>
+            <Field label="Nome" value={identificacao.nome} onChange={onChange("nome", up)} full />
+            <Field label="Código MEC" value={identificacao.codigoMec} onChange={onChange("codigoMec")} />
+            <Field label="CNPJ" value={identificacao.cnpj} onChange={onChange("cnpj")} />
+            <Field label="Mantenedora" value={identificacao.mantenedora} onChange={onChange("mantenedora", up)} full />
+          </>
+        )}
+        <Field label="Logradouro" value={bloco.logradouro} onChange={onChange("logradouro", up)} />
+        <Field label="Número" value={bloco.numero} onChange={onChange("numero")} />
+        <Field label="Bairro" value={bloco.bairro} onChange={onChange("bairro", up)} />
+        <Field label="CEP" value={bloco.cep} onChange={onChange("cep", maskCEP)} placeholder="00000-000" />
+        <Field label="Município" value={bloco.municipio} onChange={onChange("municipio", up)} />
+        <Field label="Código do Município" value={bloco.codigoMunicipio} onChange={onChange("codigoMunicipio")} placeholder="Preenchido pelo IBGE a partir do município e UF" />
+        <Field label="UF" value={bloco.uf} onChange={onChange("uf", v => v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2))} />
+      </div>
+    </div>
   );
 }
 
