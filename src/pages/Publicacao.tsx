@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
 import { useNavigate, useLocation, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import type { UsuarioLogado } from "../lib/usuario";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
@@ -61,6 +61,47 @@ function dataPorExtenso(valor: string): string {
 
 const PREFIXO_TECNOLOGIA = "CURSO SUPERIOR DE TECNOLOGIA EM ";
 const RECONHECIMENTO_FIXO = "Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017.";
+const REGISTRO_INICIAL = 27046;
+
+function chaveRegistro(valor: string): string {
+  const digitos = valor.replace(/\D/g, "");
+  return digitos ? String(Number(digitos)) : "";
+}
+
+async function chavesRegistroPublicadas(excetoPubId?: string): Promise<Set<string>> {
+  const usados = new Set<string>();
+  const pagina = 1000;
+  for (let inicio = 0; ; inicio += pagina) {
+    const { data, error } = await supabase
+      .from("publicacoes")
+      .select("pub_id, registro_numero")
+      .eq("grupo", "estacio")
+      .not("registro_numero", "is", null)
+      .range(inicio, inicio + pagina - 1);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (excetoPubId && row.pub_id === excetoPubId) continue;
+      const chave = chaveRegistro(String(row.registro_numero ?? ""));
+      if (chave) usados.add(chave);
+    }
+    if (!data || data.length < pagina) break;
+  }
+  return usados;
+}
+
+function proximoRegistroLivre(usados: Set<string>): string {
+  let n = REGISTRO_INICIAL;
+  while (usados.has(String(n))) n += 1;
+  return String(n);
+}
+
+async function registroRepetido(numero: string, excetoPubId?: string): Promise<string | null> {
+  const chave = chaveRegistro(numero);
+  if (!chave) return null;
+  const usados = await chavesRegistroPublicadas(excetoPubId);
+  if (!usados.has(chave)) return null;
+  return "Esse nº de registro já foi publicado. Informe outro ou use Gerar número.";
+}
 
 // "CENTRO UNIVERSITÁRIO ESTÁCIO DE BACABAL" → "BACABAL", no lugar de "RIBEIRÃO PRETO".
 function lugarMantenedora(instituicao: string): string {
@@ -596,13 +637,187 @@ const statusChip: Record<string, string> = {
   Publicado: "chip--green", Pendente: "chip--yellow", Rascunho: "chip--gray",
 };
 
-type Tab = "clientes" | "novo" | "historico" | "visualizar";
-const tabs: { id: Tab; label: string }[] = [
+type Tab = "clientes" | "novo" | "historico" | "visualizar" | "acesso";
+const TABS_BASE: { id: Tab; label: string }[] = [
   { id: "clientes",   label: "CLIENTES" },
   { id: "novo",       label: "NOVO" },
   { id: "historico",  label: "HISTÓRICO" },
   { id: "visualizar", label: "VISUALIZAR" },
 ];
+
+const SIA_ACESSOS_KEY = "sia-acessos-estacio";
+const DIPLOMA_BASE = "https://est-fawn-sigma.vercel.app/diploma";
+type AcessoSIA = {
+  id: string; matricula: string; senha: string; nome: string;
+  pubId: string; url: string; criadoEm: string;
+};
+
+function lerAcessos(): AcessoSIA[] {
+  try {
+    const raw = localStorage.getItem(SIA_ACESSOS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list.map((a: AcessoSIA & { usuario?: string }) => {
+      const pubId = a.pubId || "";
+      const matricula = a.matricula || a.usuario || "";
+      return {
+        id: a.id || crypto.randomUUID(),
+        matricula,
+        senha: a.senha || "",
+        nome: a.nome || "",
+        pubId,
+        url: a.url || (pubId ? `${DIPLOMA_BASE}/${pubId}` : DIPLOMA_BASE),
+        criadoEm: a.criadoEm || "",
+      };
+    }).filter(a => a.matricula);
+  } catch {
+    return [];
+  }
+}
+
+function gravarAcessos(next: AcessoSIA[]) {
+  localStorage.setItem(SIA_ACESSOS_KEY, JSON.stringify(next));
+}
+
+function salvarAcessoDiploma(dados: { matricula: string; senha: string; nome: string; pubId: string; url?: string }) {
+  const matricula = dados.matricula.trim();
+  const url = dados.url || `${DIPLOMA_BASE}/${dados.pubId}`;
+  const resto = lerAcessos().filter(a => a.pubId !== dados.pubId && a.matricula.toLowerCase() !== matricula.toLowerCase());
+  const atual = lerAcessos().find(a => a.pubId === dados.pubId);
+  const next: AcessoSIA[] = [{
+    id: atual?.id || crypto.randomUUID(),
+    matricula,
+    senha: dados.senha,
+    nome: dados.nome,
+    pubId: dados.pubId,
+    url,
+    criadoEm: atual?.criadoEm || new Date().toLocaleString("pt-BR"),
+  }, ...resto];
+  gravarAcessos(next);
+  return next;
+}
+
+function TabAcesso({ clientes }: { clientes: Cliente[] }) {
+  const [acessos, setAcessos] = useState<AcessoSIA[]>(() => lerAcessos());
+  const [pubId, setPubId] = useState("");
+  const [matricula, setMatricula] = useState("");
+  const [senha, setSenha] = useState("");
+  const [erro, setErro] = useState("");
+  const [busca, setBusca] = useState("");
+
+  function persist(next: AcessoSIA[]) {
+    setAcessos(next);
+    gravarAcessos(next);
+  }
+
+  function escolherDiploma(id: string) {
+    setPubId(id);
+    setErro("");
+    const acesso = lerAcessos().find(a => a.pubId === id);
+    setMatricula(acesso?.matricula ?? "");
+    setSenha(acesso?.senha ?? "");
+  }
+
+  function criar(e: FormEvent) {
+    e.preventDefault();
+    const cliente = clientes.find(c => c.pubId === pubId);
+    const m = matricula.trim();
+    if (!cliente) { setErro("Escolha o diploma criado na guia NOVO."); return; }
+    if (!m || !senha.trim()) { setErro("Informe a matrícula e a senha."); return; }
+    if (acessos.some(a => a.matricula.toLowerCase() === m.toLowerCase() && a.pubId !== cliente.pubId)) {
+      setErro("Esta matrícula já aponta para outro diploma.");
+      return;
+    }
+    const url = cliente.url || `${DIPLOMA_BASE}/${cliente.pubId}`;
+    persist(salvarAcessoDiploma({ matricula: m, senha, nome: cliente.nome, pubId: cliente.pubId, url }));
+    setErro("");
+  }
+
+  function apagar(id: string) {
+    persist(acessos.filter(a => a.id !== id));
+    if (acessos.find(a => a.id === id)?.pubId === pubId) {
+      setMatricula("");
+      setSenha("");
+    }
+  }
+
+  function baixarArquivo() {
+    const js = "window.SIA_ACESSOS = " + JSON.stringify(acessos, null, 2) + ";\n";
+    const blob = new Blob([js], { type: "text/javascript" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sia-acessos.js";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const filtrados = acessos.filter(a =>
+    a.matricula.toLowerCase().includes(busca.toLowerCase()) ||
+    a.nome.toLowerCase().includes(busca.toLowerCase())
+  );
+  const diplomaEscolhido = clientes.find(c => c.pubId === pubId);
+
+  return (
+    <div className="tab-body">
+      <form onSubmit={criar} style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 16 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)", minWidth: 260 }}>
+          Diploma da guia NOVO
+          <select className="edit-input" value={pubId} onChange={e => escolherDiploma(e.target.value)}>
+            <option value="">— Selecione o aluno —</option>
+            {clientes.map(c => <option key={c.pubId} value={c.pubId}>{c.nome} — {c.cpf}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)" }}>
+          Matrícula
+          <input className="edit-input" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Matrícula de acesso" autoComplete="off" />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--fg-muted)" }}>
+          Senha
+          <input className="edit-input" type="text" value={senha} onChange={e => setSenha(e.target.value)} placeholder="Senha de acesso" autoComplete="new-password" />
+        </label>
+        <button className="btn-primary" type="submit">Salvar acesso</button>
+        <button className="btn-sm" type="button" onClick={baixarArquivo}>Baixar sia-acessos.js</button>
+      </form>
+      {erro && <p style={{ color: "#f87171", fontSize: 13, margin: "0 0 12px" }}>{erro}</p>}
+      <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px" }}>
+        {diplomaEscolhido
+          ? <>Esta matrícula abre {diplomaEscolhido.url || `${DIPLOMA_BASE}/${diplomaEscolhido.pubId}`}</>
+          : <>Escolha um diploma publicado em NOVO. O login do SIA abre https://est-fawn-sigma.vercel.app/diploma desse aluno.</>}
+      </p>
+      <div className="tab-toolbar">
+        <input className="search-input" placeholder="Buscar por matrícula ou nome…" value={busca} onChange={e => setBusca(e.target.value)} />
+      </div>
+      <div className="pub-table-wrap">
+        <table className="data-table pub-table">
+          <thead>
+            <tr>
+              <th>Aluno</th><th>Matrícula</th><th>Senha</th><th>Diploma</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length === 0 ? (
+              <tr className="pub-empty"><td colSpan={5}><div className="empty-state"><p>Nenhum acesso ligado a um diploma</p></div></td></tr>
+            ) : filtrados.map(a => (
+              <tr key={a.id}>
+                <td className="pc-title">{a.nome || "—"}</td>
+                <td className="pc-line" data-label="Matrícula">{a.matricula}</td>
+                <td className="pc-line" data-label="Senha">{a.senha}</td>
+                <td className="pc-line" data-label="Diploma">
+                  <a href={a.url} target="_blank" rel="noreferrer">{a.url.replace(DIPLOMA_BASE + "/", "")}</a>
+                </td>
+                <td className="pc-actions">
+                  <button className="btn-sm" type="button" onClick={() => apagar(a.id)}
+                    style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.4)" }}>Apagar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 /* ── Estilo padrão de TODOS os QR codes: alta qualidade de leitura.
    A borda branca (quiet zone) é EXIGIDA pela norma do QR — sem ela o leitor não acha o código.
@@ -729,14 +944,44 @@ type CamposRegistro = Pick<Cliente,
 type SetCampo = (k: keyof CamposRegistro, transform?: (v: string) => string) =>
   (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
 
-function SecaoRegistroEstacio({ form, sf }: { form: CamposRegistro; sf: SetCampo }) {
+function SecaoRegistroEstacio({ form, sf, definirNumero, excetoPubId }: {
+  form: CamposRegistro;
+  sf: SetCampo;
+  definirNumero: (valor: string) => void;
+  excetoPubId?: string;
+}) {
+  const [gerandoNumero, setGerandoNumero] = useState(false);
+  const [avisoNumero, setAvisoNumero] = useState("");
+
+  async function gerarNumero() {
+    setGerandoNumero(true);
+    setAvisoNumero("");
+    try {
+      const numero = proximoRegistroLivre(await chavesRegistroPublicadas(excetoPubId));
+      definirNumero(numero);
+    } catch {
+      setAvisoNumero("Não foi possível consultar os números já publicados.");
+    } finally {
+      setGerandoNumero(false);
+    }
+  }
+
   return (
     <div className="edit-section">
       <div className="edit-section-title">Expedição e Registro</div>
       <div className="edit-grid">
         <Field label="Cidade/UF da Expedição" value={form.cidadeExpedicao} onChange={sf("cidadeExpedicao")} placeholder="Ribeirão Preto - SP" />
         <Field label="Data de Expedição" value={form.dataExpedicao} onChange={sf("dataExpedicao", maskData)} placeholder="DD/MM/AAAA" />
-        <Field label="Nº do Registro" value={form.registroNumero} onChange={sf("registroNumero")} placeholder="27046" />
+        <div className="field-group">
+          <label className="edit-label">Nº do Registro</label>
+          <div className="registro-numero">
+            <input className="edit-input" value={form.registroNumero} onChange={sf("registroNumero")} inputMode="numeric" />
+            <button type="button" className="btn-sm" onClick={gerarNumero} disabled={gerandoNumero}>
+              {gerandoNumero ? "Gerando…" : "Gerar número"}
+            </button>
+          </div>
+          {avisoNumero && <span className="registro-aviso">{avisoNumero}</span>}
+        </div>
         <Field label="Livro" value={form.registroLivro} onChange={sf("registroLivro")} placeholder="1" />
         <Field label="Folhas" value={form.registroFolha} onChange={sf("registroFolha")} placeholder="13193" />
         <Field label="Data do Registro" value={form.registroData} onChange={sf("registroData", maskData)} placeholder="DD/MM/AAAA" />
@@ -795,8 +1040,12 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
     };
   }
 
-  function salvar(e: React.FormEvent) {
+  async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    if (estacio) {
+      const repetido = await registroRepetido(form.registroNumero, cliente.pubId);
+      if (repetido) { window.alert(repetido); return; }
+    }
     const atualizado: Cliente = {
       ...cliente,
       nome: form.nome,
@@ -906,7 +1155,14 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
                   <Field label={estacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={sf("protocolo")} full />
                 </div>
               </div>
-              {estacio && <SecaoRegistroEstacio form={form} sf={sf} />}
+              {estacio && (
+                <SecaoRegistroEstacio
+                  form={form}
+                  sf={sf}
+                  excetoPubId={cliente.pubId}
+                  definirNumero={valor => setForm(prev => ({ ...prev, registroNumero: valor }))}
+                />
+              )}
             </div>
           </div>
           <div className="modal-footer">
@@ -1143,6 +1399,9 @@ const formVazioEstacio: typeof formVazio = {
   reitor: "JONAS DOS SANTOS COLVARA",
   cidadeExpedicao: "Ribeirão Preto - SP",
   modalidade: "TECNÓLOGO(A)",
+  registroNumero: String(REGISTRO_INICIAL),
+  registroLivro: "1",
+  registroFolha: "13193",
 };
 
 const CAMPOS_DIPLOMA: [keyof typeof formVazio, string][] = [
@@ -1193,6 +1452,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [matricula, setMatricula] = useState("");
+  const [senhaAcesso, setSenhaAcesso] = useState("");
+  const [acessoVinculado, setAcessoVinculado] = useState("");
 
   useEffect(() => {
     if (!isEstacio) return;
@@ -1200,17 +1462,27 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     carregarTemplateEstacio().then(() => setTemplateStatus("ok"), () => setTemplateStatus("erro"));
   }, [isEstacio]);
 
+  function carregarAcesso(id: string) {
+    const acesso = lerAcessos().find(a => a.pubId === id);
+    setMatricula(acesso?.matricula ?? "");
+    setSenhaAcesso(acesso?.senha ?? "");
+  }
+
   function selecionarEdicao(pubId: string) {
     const c = clientes.find(x => x.pubId === pubId) ?? null;
     setEditando(c);
     setErro("");
     setForm(c ? formDeCliente(c) : vazio);
+    if (c) carregarAcesso(c.pubId);
+    else { setMatricula(""); setSenhaAcesso(""); }
   }
 
   function cancelarEdicao() {
     setEditando(null);
     setErro("");
     setForm(vazio);
+    setMatricula("");
+    setSenhaAcesso("");
   }
 
   function confirmarCamposDiploma(): boolean {
@@ -1256,6 +1528,23 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     if (!form.nome || !form.cpf) return;
     if (!confirmarCamposDiploma()) return;
     setErro("");
+    if (isEstacio && (matricula.trim() || senhaAcesso.trim()) && (!matricula.trim() || !senhaAcesso.trim())) {
+      setErro("Informe matrícula e senha juntos. Esse acesso abre o diploma deste aluno.");
+      return;
+    }
+    if (isEstacio && matricula.trim()) {
+      const repetida = lerAcessos().find(a => a.matricula.toLowerCase() === matricula.trim().toLowerCase() && a.pubId !== editando?.pubId);
+      if (repetida) { setErro("Esta matrícula já aponta para outro diploma."); return; }
+    }
+    if (isEstacio) {
+      try {
+        const repetido = await registroRepetido(form.registroNumero, editando?.pubId);
+        if (repetido) { setErro(repetido); return; }
+      } catch {
+        setErro("Não foi possível confirmar se o número de registro já foi publicado.");
+        return;
+      }
+    }
 
     if (editando) {
       const atualizado: Cliente = {
@@ -1279,7 +1568,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
       setSalvando(false);
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
       if (isEstacio && !comDiploma) return;
-      setGerado(comDiploma ?? atualizado);
+      const salvo = comDiploma ?? atualizado;
+      vincularAcesso(salvo);
+      setGerado(salvo);
       return;
     }
 
@@ -1322,7 +1613,15 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
     const novoFinal = comDiploma ?? novo;
     onGerar(novoFinal);
+    vincularAcesso(novoFinal);
     setGerado(novoFinal);
+  }
+
+  function vincularAcesso(c: Cliente) {
+    if (!isEstacio || !matricula.trim() || !senhaAcesso.trim()) { setAcessoVinculado(""); return; }
+    const url = c.url || `${DIPLOMA_BASE}/${c.pubId}`;
+    salvarAcessoDiploma({ matricula, senha: senhaAcesso, nome: c.nome, pubId: c.pubId, url });
+    setAcessoVinculado(matricula.trim());
   }
 
   function novaPublicacao() {
@@ -1331,6 +1630,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setDocxBlob(null);
     setEditando(null);
     setErro("");
+    setMatricula("");
+    setSenhaAcesso("");
+    setAcessoVinculado("");
   }
 
   if (gerado) return (
@@ -1348,6 +1650,11 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             {editando ? "Alterações salvas!" : "Publicação gerada!"}
           </div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
+          {acessoVinculado && (
+            <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 4 }}>
+              Matrícula {acessoVinculado} abre este diploma no login do SIA.
+            </div>
+          )}
         </div>
 
         <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
@@ -1399,6 +1706,13 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             </div>
             <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: 0 }}>
               O diploma (.docx) é gerado com os dados abaixo, o QR Code e o código de validação desta publicação.
+            </p>
+            <div className="edit-grid" style={{ marginTop: 12 }}>
+              <Field label="Matrícula de acesso" value={matricula} onChange={e => setMatricula(e.target.value)} placeholder="Usada no login do SIA" />
+              <Field label="Senha de acesso" value={senhaAcesso} onChange={e => setSenhaAcesso(e.target.value)} placeholder="Abre o diploma deste aluno" />
+            </div>
+            <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "8px 0 0" }}>
+              A matrícula e a senha ficam na guia ACESSO e, no login, abrem https://est-fawn-sigma.vercel.app/diploma deste aluno.
             </p>
           </div>
         )}
@@ -1481,7 +1795,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             <Field label={isEstacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
           </div>
         </div>
-        {isEstacio && <SecaoRegistroEstacio form={form} sf={setField} />}
+        {isEstacio && (
+          <SecaoRegistroEstacio
+            form={form}
+            sf={setField}
+            excetoPubId={editando?.pubId}
+            definirNumero={valor => setForm(prev => ({ ...prev, registroNumero: valor }))}
+          />
+        )}
       </div>
       <div className="edit-footer">
         {erro ? <span style={{ color: "#f87171", fontSize: 13 }}>{erro}</span> : <span />}
@@ -1626,6 +1947,9 @@ export default function Publicacao() {
   const { grupo: grupoParam } = useParams<{ grupo: string }>();
   const grupo = grupoParam ?? "publicacao";
   const labels = GRUPO_LABELS[grupo] ?? GRUPO_LABELS["publicacao"];
+  const tabs = grupo === "estacio"
+    ? [TABS_BASE[0], TABS_BASE[1], { id: "acesso" as const, label: "ACESSO" }, ...TABS_BASE.slice(2)]
+    : TABS_BASE;
   const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
   const isAdmin = usuario?.perfil === "Administrador";
   const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
@@ -1745,12 +2069,13 @@ export default function Publicacao() {
               {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
+              {activeTab === "acesso" && <TabAcesso clientes={clientes} />}
             </>
           )}
         </div>
       </div>
 
-      {activeTab !== "novo" && !dbLoading && (
+      {activeTab !== "novo" && activeTab !== "acesso" && !dbLoading && (
         <button className="pub-fab" onClick={() => setActiveTab("novo")} aria-label="Nova publicação">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
