@@ -7,28 +7,22 @@ import { marcarConcluido } from "../lib/controle";
 import "../components/Layout.css";
 import "./Publicacao.css";
 
-/* ── Helpers de template DOCX ── */
-const TEMPLATE_KEY = "docx_template_estacio";
+/* ── Helpers de template DOCX ──
+   O template oficial é gerado por scripts/gerar-template-estacio.mjs a partir do diploma original. */
+const TEMPLATE_URL = "/templates/diploma-estacio.docx";
+const TEMPLATE_QR = "word/media/qrcode.png";
+const TEMPLATE_KEY_LEGADO = "docx_template_estacio";
 
-function salvarTemplateStorage(buf: ArrayBuffer) {
-  try {
-    const bytes = new Uint8Array(buf);
-    let bin = "";
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    localStorage.setItem(TEMPLATE_KEY, btoa(bin));
-  } catch {}
-}
-
-function carregarTemplateStorage(): ArrayBuffer | null {
-  try {
-    const b64 = localStorage.getItem(TEMPLATE_KEY);
-    if (!b64) return null;
-    const bin = atob(b64);
-    const buf = new ArrayBuffer(bin.length);
-    const view = new Uint8Array(buf);
-    for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+let templateCache: Promise<ArrayBuffer> | null = null;
+function carregarTemplateEstacio(): Promise<ArrayBuffer> {
+  templateCache ??= fetch(TEMPLATE_URL).then(async r => {
+    if (!r.ok) throw new Error(`Template indisponível (HTTP ${r.status})`);
+    const buf = await r.arrayBuffer();
+    const assinatura = new Uint8Array(buf, 0, 2);
+    if (assinatura[0] !== 0x50 || assinatura[1] !== 0x4b) throw new Error("Template recebido não é um .docx");
     return buf;
-  } catch { return null; }
+  }).catch(e => { templateCache = null; throw e; });
+  return templateCache;
 }
 
 const STORAGE_BUCKET = "diplomas";
@@ -47,24 +41,118 @@ async function uploadDocxStorage(blob: Blob, pubId: string): Promise<string | nu
       return null;
     }
     const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-    console.log("[docx upload] ok →", data.publicUrl);
-    return data.publicUrl;
+    // O caminho se repete a cada edição; a versão evita que o CDN entregue o arquivo anterior.
+    const url = `${data.publicUrl}?v=${Date.now()}`;
+    console.log("[docx upload] ok →", url);
+    return url;
   } catch (e) {
     console.error("[docx upload] catch", e);
     return null;
   }
 }
 
-async function gerarDocxPreenchido(template: ArrayBuffer, dados: Record<string, string>): Promise<Blob> {
-  const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+function dataPorExtenso(valor: string): string {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(valor.trim());
+  if (!m || !MESES[Number(m[2]) - 1]) return valor;
+  return `${Number(m[1])} de ${MESES[Number(m[2]) - 1]} de ${m[3]}`;
+}
+
+const PREFIXO_TECNOLOGIA = "CURSO SUPERIOR DE TECNOLOGIA EM ";
+
+// Frente: "CURSO SUPERIOR DE TECNOLOGIA EM GESTÃO DE TURISMO"; verso: "Curso de GESTÃO DE TURISMO".
+function nomesDoCurso(curso: string, modalidade: string): { descricao: string; nome: string } {
+  const limpo = curso.trim();
+  const nome = limpo.replace(/^CURSO SUPERIOR DE TECNOLOGIA EM\s+/i, "").replace(/^CURSO DE\s+/i, "");
+  if (/^CURSO\b/i.test(limpo)) return { descricao: limpo, nome };
+  return { descricao: (/TECN[OÓ]LOGO/i.test(modalidade) ? PREFIXO_TECNOLOGIA : "CURSO DE ") + nome, nome };
+}
+
+function dadosDoDiploma(c: Cliente): Record<string, string> {
+  const curso = nomesDoCurso(c.curso, c.modalidade);
+  return {
+    instituicao: c.instituicao,
+    reitor: c.reitor,
+    curso_descricao: curso.descricao,
+    curso_nome: curso.nome,
+    curso_reconhecimento: c.cursoReconhecimento,
+    modalidade: c.modalidade.replace(/\s*\(A\)$/i, " (A)"),
+    data: c.data,
+    data_colacao: c.dataColacao,
+    nome: c.nome,
+    nacionalidade: c.nacionalidade,
+    naturalidade: c.naturalidade,
+    nascimento: c.nascimento,
+    rg: c.rg,
+    orgao_expedidor: c.orgaoExpedidor,
+    cidade_expedicao: c.cidadeExpedicao,
+    data_expedicao_extenso: dataPorExtenso(c.dataExpedicao),
+    registro_numero: c.registroNumero,
+    registro_livro: c.registroLivro,
+    registro_folha: c.registroFolha,
+    registro_data: c.registroData,
+    registro_processo: c.registroProcesso,
+    protocolo: c.protocolo,
+    pub_id: c.pubId,
+    url: c.url,
+  };
+}
+
+const hexAleatorio = (bytes: number) =>
+  Array.from(crypto.getRandomValues(new Uint8Array(bytes))).map(b => b.toString(16).padStart(2, "0")).join("");
+
+// Estácio: mesmo formato do Código de Validação oficial, ex. "1270.163.c792736cf907".
+const PREFIXO_CODIGO_ESTACIO = "1270.163.";
+
+async function gerarPubId(estacio: boolean): Promise<string> {
+  if (!estacio) return hexAleatorio(5);
+  for (let tentativa = 0; tentativa < 5; tentativa++) {
+    const id = PREFIXO_CODIGO_ESTACIO + hexAleatorio(6);
+    const { count, error } = await supabase
+      .from("publicacoes").select("pub_id", { count: "exact", head: true }).eq("pub_id", id);
+    if (error || !count) return id;
+  }
+  return PREFIXO_CODIGO_ESTACIO + hexAleatorio(6);
+}
+
+const escXml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+async function gerarDocxPreenchido(template: ArrayBuffer, cliente: Cliente): Promise<Blob> {
+  const [{ default: PizZip }, { default: Docxtemplater }, { default: QRCode }] = await Promise.all([
     import("pizzip"),
     import("docxtemplater"),
+    import("qrcode"),
   ]);
   const zip = new PizZip(template);
-  const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
-  doc.render(dados);
-  const out = doc.getZip().generate({ type: "arraybuffer" });
+  const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+  doc.render(dadosDoDiploma(cliente));
+  const saida = doc.getZip();
+
+  const qr = await QRCode.toDataURL(cliente.url, {
+    errorCorrectionLevel: QR_STYLE.level, margin: QR_STYLE.marginSize, width: 512,
+    color: { dark: QR_STYLE.fgColor, light: QR_STYLE.bgColor },
+  });
+  saida.file(TEMPLATE_QR, qr.split(",")[1], { base64: true });
+
+  const relsPath = "word/_rels/document.xml.rels";
+  const rels = saida.file(relsPath)?.asText();
+  if (rels) {
+    saida.file(relsPath, rels.replace(
+      /(<Relationship [^>]*Type="[^"]*\/hyperlink"[^>]*Target=")[^"]*(")/g,
+      `$1${escXml(cliente.url)}$2`,
+    ));
+  }
+
+  const out = saida.generate({ type: "arraybuffer" });
   return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+// Gera o diploma preenchido e publica no Storage; docxUrl fica vazio se o upload falhar.
+async function publicarDocxEstacio(cliente: Cliente): Promise<{ blob: Blob; docxUrl: string | null }> {
+  const blob = await gerarDocxPreenchido(await carregarTemplateEstacio(), cliente);
+  const docxUrl = await uploadDocxStorage(blob, cliente.pubId);
+  return { blob, docxUrl };
 }
 
 async function renderizarDocx(blob: Blob, container: HTMLElement) {
@@ -421,6 +509,9 @@ interface Cliente {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
   protocolo: string; url: string; docxUrl: string;
+  naturalidade: string; cidadeExpedicao: string; dataExpedicao: string;
+  registroNumero: string; registroLivro: string; registroFolha: string; registroData: string; registroProcesso: string;
+  cursoReconhecimento: string;
   pagamentoStatus: "pendente" | "pago";
   ativo: boolean;
 }
@@ -432,6 +523,9 @@ type DBRow = {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
   docx_url?: string;
+  naturalidade?: string; cidade_expedicao?: string; data_expedicao?: string;
+  registro_numero?: string; registro_livro?: string; registro_folha?: string; registro_data?: string; registro_processo?: string;
+  curso_reconhecimento?: string;
   pagamento_status?: "pendente" | "pago";
   ativo?: boolean;
   created_by?: string | null;
@@ -450,6 +544,15 @@ function rowToCliente(r: DBRow): Cliente {
     municipio: r.municipio, cep: r.cep, modalidade: r.modalidade,
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo, url: r.url,
     docxUrl: r.docx_url ?? "",
+    naturalidade: r.naturalidade ?? "",
+    cidadeExpedicao: r.cidade_expedicao ?? "",
+    dataExpedicao: r.data_expedicao ?? "",
+    registroNumero: r.registro_numero ?? "",
+    registroLivro: r.registro_livro ?? "",
+    registroFolha: r.registro_folha ?? "",
+    registroData: r.registro_data ?? "",
+    registroProcesso: r.registro_processo ?? "",
+    cursoReconhecimento: r.curso_reconhecimento ?? "",
     pagamentoStatus: r.pagamento_status === "pago" ? "pago" : "pendente",
     ativo: r.ativo !== false,
   };
@@ -468,6 +571,15 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
     docx_url: c.docxUrl || undefined,
+    naturalidade: c.naturalidade || undefined,
+    cidade_expedicao: c.cidadeExpedicao || undefined,
+    data_expedicao: c.dataExpedicao || undefined,
+    registro_numero: c.registroNumero || undefined,
+    registro_livro: c.registroLivro || undefined,
+    registro_folha: c.registroFolha || undefined,
+    registro_data: c.registroData || undefined,
+    registro_processo: c.registroProcesso || undefined,
+    curso_reconhecimento: c.cursoReconhecimento || undefined,
   };
 }
 
@@ -603,8 +715,39 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
 }
 
 /* ── Modal EDITAR ── */
-function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (c: Cliente) => void; onClose: () => void }) {
+type CamposRegistro = Pick<Cliente,
+  "cidadeExpedicao" | "dataExpedicao" | "registroNumero" | "registroLivro" | "registroFolha" | "registroData" | "registroProcesso">;
+type SetCampo = (k: keyof CamposRegistro, transform?: (v: string) => string) =>
+  (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+
+function SecaoRegistroEstacio({ form, sf }: { form: CamposRegistro; sf: SetCampo }) {
+  return (
+    <div className="edit-section">
+      <div className="edit-section-title">Expedição e Registro</div>
+      <div className="edit-grid">
+        <Field label="Cidade/UF da Expedição" value={form.cidadeExpedicao} onChange={sf("cidadeExpedicao")} placeholder="Ribeirão Preto - SP" />
+        <Field label="Data de Expedição" value={form.dataExpedicao} onChange={sf("dataExpedicao", maskData)} placeholder="DD/MM/AAAA" />
+        <Field label="Nº do Registro" value={form.registroNumero} onChange={sf("registroNumero")} placeholder="27046" />
+        <Field label="Livro" value={form.registroLivro} onChange={sf("registroLivro")} placeholder="1" />
+        <Field label="Folhas" value={form.registroFolha} onChange={sf("registroFolha")} placeholder="13193" />
+        <Field label="Data do Registro" value={form.registroData} onChange={sf("registroData", maskData)} placeholder="DD/MM/AAAA" />
+        <Field label="Processo" value={form.registroProcesso} onChange={sf("registroProcesso", up)} placeholder="SRD/6247907-IP/2022" full />
+      </div>
+    </div>
+  );
+}
+
+function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; estacio: boolean; onSave: (c: Cliente) => void; onClose: () => void }) {
   const [form, setForm] = useState({
+    naturalidade: cliente.naturalidade,
+    cidadeExpedicao: cliente.cidadeExpedicao,
+    dataExpedicao: cliente.dataExpedicao,
+    registroNumero: cliente.registroNumero,
+    registroLivro: cliente.registroLivro,
+    registroFolha: cliente.registroFolha,
+    registroData: cliente.registroData,
+    registroProcesso: cliente.registroProcesso,
+    cursoReconhecimento: cliente.cursoReconhecimento,
     nome: cliente.nome,
     nascimento: cliente.nascimento,
     cpf: cliente.cpf,
@@ -669,6 +812,15 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
       anoConclusao: form.anoConclusao,
       protocolo: form.protocolo,
       data: form.data,
+      naturalidade: form.naturalidade,
+      cidadeExpedicao: form.cidadeExpedicao,
+      dataExpedicao: form.dataExpedicao,
+      registroNumero: form.registroNumero,
+      registroLivro: form.registroLivro,
+      registroFolha: form.registroFolha,
+      registroData: form.registroData,
+      registroProcesso: form.registroProcesso,
+      cursoReconhecimento: form.cursoReconhecimento,
     };
     onSave(atualizado);
     onClose();
@@ -700,6 +852,7 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                   <Field label="RG/RNE/RA" value={form.rg} onChange={sf("rg", maskRG)} placeholder="000000000000-0" />
                   <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={sf("orgaoExpedidor", up)} placeholder="SSP/SP" />
                   <Field label="Nacionalidade" value={form.nacionalidade} onChange={sf("nacionalidade", up)} placeholder="BRASILEIRO(A)" />
+                  {estacio && <Field label="Naturalidade" value={form.naturalidade} onChange={sf("naturalidade", up)} placeholder="SÃO PAULO" />}
                   <Field label="Nome da Mãe" value={form.nomeMae} onChange={sf("nomeMae", up)} />
                   <Field label="Nome do Pai" value={form.nomePai} onChange={sf("nomePai", up)} />
                   <Field label="Observações" value={form.observacao} onChange={sf("observacao", up)} full />
@@ -739,12 +892,14 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
                 <div className="edit-section-title">Resumo da Publicação</div>
                 <div className="edit-grid">
                   <Field label="Curso" value={form.curso} onChange={sf("curso", up)} full />
+                  {estacio && <Field label="Reconhecimento do Curso" value={form.cursoReconhecimento} onChange={sf("cursoReconhecimento")} placeholder="Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017." full />}
                   <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={sf("anoConclusao")} />
-                  <Field label="Data de Conclusão do Curso" value={form.data} onChange={sf("data")} placeholder="DD/MM/AAAA" />
+                  <Field label="Data de Conclusão do Curso" value={form.data} onChange={sf("data", maskData)} placeholder="DD/MM/AAAA" />
                   <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={sf("dataColacao", maskData)} placeholder="DD/MM/AAAA" />
-                  <Field label="Protocolo" value={form.protocolo} onChange={sf("protocolo")} full />
+                  <Field label={estacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={sf("protocolo")} full />
                 </div>
               </div>
+              {estacio && <SecaoRegistroEstacio form={form} sf={sf} />}
             </div>
           </div>
           <div className="modal-footer">
@@ -758,9 +913,10 @@ function ModalEditar({ cliente, onSave, onClose }: { cliente: Cliente; onSave: (
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, isAdmin, onNovo, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
+function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
   clientes: Cliente[];
   isAdmin: boolean;
+  estacio: boolean;
   onNovo: () => void;
   onEditar: (c: Cliente) => void;
   onApagar: (c: Cliente) => void | Promise<void>;
@@ -803,6 +959,7 @@ function TabClientes({ clientes, isAdmin, onNovo, onEditar, onApagar, onToggleAt
       {editCliente && (
         <ModalEditar
           cliente={editCliente}
+          estacio={estacio}
           onSave={onEditar}
           onClose={() => setEditCliente(null)}
         />
@@ -967,7 +1124,28 @@ const formVazio = {
   instituicao: "", inep: "", endereco: "", bairro: "", municipio: "", cep: "",
   modalidade: "BACHAREL", curso: "", anoConclusao: "2026", dataPublicacao: "",
   protocolo: "",
+  naturalidade: "", cidadeExpedicao: "", dataExpedicao: "",
+  registroNumero: "", registroLivro: "", registroFolha: "", registroData: "", registroProcesso: "",
+  cursoReconhecimento: "",
 };
+
+// Valores fixos do template Estácio (assinatura do reitor e textos do verso são desta IES).
+const formVazioEstacio: typeof formVazio = {
+  ...formVazio,
+  instituicao: "CENTRO UNIVERSITÁRIO ESTÁCIO DE RIBEIRÃO PRETO",
+  reitor: "JONAS DOS SANTOS COLVARA",
+  cidadeExpedicao: "Ribeirão Preto - SP",
+  modalidade: "TECNÓLOGO(A)",
+};
+
+const CAMPOS_DIPLOMA: [keyof typeof formVazio, string][] = [
+  ["instituicao", "Nome da Instituição"], ["reitor", "Reitor(a)"], ["curso", "Curso"],
+  ["cursoReconhecimento", "Reconhecimento do Curso"], ["dataPublicacao", "Data de Conclusão"],
+  ["dataColacao", "Data da Colação"], ["naturalidade", "Naturalidade"], ["nascimento", "Data de Nascimento"],
+  ["rg", "RG"], ["orgaoExpedidor", "Órgão Expedidor"], ["cidadeExpedicao", "Cidade/UF da Expedição"],
+  ["dataExpedicao", "Data de Expedição"], ["registroNumero", "Nº do Registro"], ["registroLivro", "Livro"],
+  ["registroFolha", "Folhas"], ["registroData", "Data do Registro"], ["registroProcesso", "Processo"],
+];
 
 function formDeCliente(c: Cliente): typeof formVazio {
   return {
@@ -981,6 +1159,10 @@ function formDeCliente(c: Cliente): typeof formVazio {
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade || "BACHAREL",
     curso: c.curso, anoConclusao: c.anoConclusao, dataPublicacao: c.data,
     protocolo: c.protocolo,
+    naturalidade: c.naturalidade, cidadeExpedicao: c.cidadeExpedicao, dataExpedicao: c.dataExpedicao,
+    registroNumero: c.registroNumero, registroLivro: c.registroLivro, registroFolha: c.registroFolha,
+    registroData: c.registroData, registroProcesso: c.registroProcesso,
+    cursoReconhecimento: c.cursoReconhecimento,
   };
 }
 
@@ -992,30 +1174,59 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   grupo?: string;
 }) {
   const isEstacio = grupo === "estacio";
+  const vazio = isEstacio ? formVazioEstacio : formVazio;
   const [form, setForm] = useState({
-    ...formVazio,
+    ...vazio,
     nome: prefill?.nome ?? "",
     cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "",
   });
   const [gerado, setGerado] = useState<Cliente | null>(null);
   const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
-  const [template, setTemplate] = useState<ArrayBuffer | null>(() => isEstacio ? carregarTemplateStorage() : null);
-  const [templateNome, setTemplateNome] = useState<string>(() => isEstacio && localStorage.getItem(TEMPLATE_KEY) ? "Template salvo" : "");
+  const [templateStatus, setTemplateStatus] = useState<"carregando" | "ok" | "erro">("carregando");
   const [editando, setEditando] = useState<Cliente | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    if (!isEstacio) return;
+    localStorage.removeItem(TEMPLATE_KEY_LEGADO);
+    carregarTemplateEstacio().then(() => setTemplateStatus("ok"), () => setTemplateStatus("erro"));
+  }, [isEstacio]);
 
   function selecionarEdicao(pubId: string) {
     const c = clientes.find(x => x.pubId === pubId) ?? null;
     setEditando(c);
     setErro("");
-    setForm(c ? formDeCliente(c) : formVazio);
+    setForm(c ? formDeCliente(c) : vazio);
   }
 
   function cancelarEdicao() {
     setEditando(null);
     setErro("");
-    setForm(formVazio);
+    setForm(vazio);
+  }
+
+  function confirmarCamposDiploma(): boolean {
+    if (!isEstacio) return true;
+    const vazios = CAMPOS_DIPLOMA.filter(([k]) => !String(form[k] ?? "").trim()).map(([, rotulo]) => rotulo);
+    if (!vazios.length) return true;
+    return window.confirm(`Estes campos do diploma estão vazios e ficarão em branco no documento:\n\n• ${vazios.join("\n• ")}\n\nGerar mesmo assim?`);
+  }
+
+  async function gerarDiploma(c: Cliente): Promise<Cliente | null> {
+    try {
+      const { blob, docxUrl } = await publicarDocxEstacio(c);
+      setDocxBlob(blob);
+      if (!docxUrl) {
+        setErro("Diploma gerado, mas o envio do .docx falhou. Salve novamente para publicar.");
+        return null;
+      }
+      return { ...c, docxUrl };
+    } catch (e) {
+      console.error("[diploma]", e);
+      setErro("Não foi possível gerar o diploma (.docx). Verifique os dados e tente novamente.");
+      return null;
+    }
   }
 
   function setField(k: keyof typeof form, transform?: (v: string) => string) {
@@ -1026,62 +1237,23 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     };
   }
 
-  function importarTemplate(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const buf = reader.result as ArrayBuffer;
-      setTemplate(buf);
-      setTemplateNome(file.name);
-      salvarTemplateStorage(buf);
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = "";
-  }
-
-  function removerTemplate() {
-    setTemplate(null);
-    setTemplateNome("");
-    localStorage.removeItem(TEMPLATE_KEY);
-  }
-
-  function buildDados(cliente: Cliente): Record<string, string> {
-    return {
-      nome: cliente.nome,
-      cpf: cliente.cpf,
-      nascimento: cliente.nascimento,
-      municipio: cliente.municipio,
-      rg: cliente.rg,
-      orgao_expedidor: cliente.orgaoExpedidor,
-      nome_mae: cliente.nomeMae,
-      nome_pai: cliente.nomePai,
-      nacionalidade: cliente.nacionalidade,
-      data_colacao: cliente.dataColacao,
-      reitor: cliente.reitor,
-      curso: cliente.curso,
-      modalidade: cliente.modalidade,
-      ano_conclusao: cliente.anoConclusao,
-      data: cliente.data,
-      instituicao: cliente.instituicao,
-      inep: cliente.inep,
-      endereco: cliente.endereco,
-      bairro: cliente.bairro,
-      cep: cliente.cep,
-      protocolo: cliente.protocolo,
-      observacao: cliente.observacao,
-      pub_id: cliente.pubId,
-      url: cliente.url,
-    };
-  }
+  const camposDiploma = {
+    naturalidade: form.naturalidade, cidadeExpedicao: form.cidadeExpedicao, dataExpedicao: form.dataExpedicao,
+    registroNumero: form.registroNumero, registroLivro: form.registroLivro, registroFolha: form.registroFolha,
+    registroData: form.registroData, registroProcesso: form.registroProcesso,
+    cursoReconhecimento: form.cursoReconhecimento,
+  };
 
   async function gerar(e: React.FormEvent) {
     e.preventDefault();
     if (!form.nome || !form.cpf) return;
+    if (!confirmarCamposDiploma()) return;
+    setErro("");
 
     if (editando) {
       const atualizado: Cliente = {
         ...editando,
+        ...camposDiploma,
         nome: form.nome, cpf: form.cpf, nascimento: form.nascimento, rg: form.rg,
         orgaoExpedidor: form.orgaoExpedidor,
         nomeMae: form.nomeMae, nomePai: form.nomePai, observacao: form.observacao,
@@ -1095,29 +1267,16 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
         protocolo: form.protocolo || editando.protocolo,
       };
       setSalvando(true);
-      setErro("");
-      const ok = await onEditar(atualizado);
+      const comDiploma = isEstacio ? await gerarDiploma(atualizado) : null;
+      const ok = await onEditar(comDiploma ?? atualizado);
       setSalvando(false);
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
-      let atualizadoFinal = atualizado;
-      if (isEstacio && template) {
-        const blob = await gerarDocxPreenchido(template, buildDados(atualizado)).catch(() => null);
-        setDocxBlob(blob);
-        if (blob) {
-          const docxUrl = await uploadDocxStorage(blob, atualizado.pubId);
-          if (docxUrl) {
-            atualizadoFinal = { ...atualizado, docxUrl };
-            await onEditar(atualizadoFinal);
-          }
-        }
-      }
-      setGerado(atualizadoFinal);
+      if (isEstacio && !comDiploma) return;
+      setGerado(comDiploma ?? atualizado);
       return;
     }
 
-    // ID curto (10 hex chars) → URL menor → QR mais simples e legível
-    const bytes = crypto.getRandomValues(new Uint8Array(5));
-    const pubId = Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    const pubId = await gerarPubId(grupo === "estacio");
     const url = grupo === "estacio"
       ? `https://est-fawn-sigma.vercel.app/diploma/${pubId}`
       : `${window.location.origin}/pub/${pubId}`;
@@ -1126,6 +1285,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     const protocolo = form.protocolo || Date.now().toString().slice(-13);
 
     const novo: Cliente = {
+      ...camposDiploma,
       id: Date.now(),
       pubId,
       nome: form.nome, cpf: form.cpf,
@@ -1149,23 +1309,17 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     };
 
     setSalvando(true);
-    let novoFinal = novo;
-    if (isEstacio && template) {
-      const blob = await gerarDocxPreenchido(template, buildDados(novo)).catch(() => null);
-      setDocxBlob(blob);
-      if (blob) {
-        const docxUrl = await uploadDocxStorage(blob, pubId);
-        if (docxUrl) novoFinal = { ...novo, docxUrl };
-      }
-    }
+    const comDiploma = isEstacio ? await gerarDiploma(novo) : null;
     setSalvando(false);
+    if (isEstacio && !comDiploma) return;
 
+    const novoFinal = comDiploma ?? novo;
     onGerar(novoFinal);
     setGerado(novoFinal);
   }
 
   function novaPublicacao() {
-    setForm(formVazio);
+    setForm(vazio);
     setGerado(null);
     setDocxBlob(null);
     setEditando(null);
@@ -1231,40 +1385,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
         {isEstacio && (
           <div className="edit-section">
             <div className="edit-section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              Template DOCX
-              {template && <span style={{ fontSize: 11, fontWeight: 400, color: "#34d399" }}>✓ carregado</span>}
+              Diploma Estácio
+              {templateStatus === "ok" && <span style={{ fontSize: 11, fontWeight: 400, color: "#34d399" }}>✓ template oficial</span>}
+              {templateStatus === "carregando" && <span style={{ fontSize: 11, fontWeight: 400, color: "var(--fg-muted)" }}>carregando template…</span>}
+              {templateStatus === "erro" && <span style={{ fontSize: 11, fontWeight: 400, color: "#f87171" }}>template indisponível</span>}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <label style={{
-                display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer",
-                background: "var(--surface-2)", border: "1px solid var(--border)",
-                borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "var(--fg)",
-                transition: "border-color .15s",
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                {template ? "Trocar template" : "Importar .docx"}
-                <input type="file" accept=".docx" style={{ display: "none" }} onChange={importarTemplate} />
-              </label>
-              {template && templateNome && (
-                <span style={{ fontSize: 12, color: "var(--fg-muted)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {templateNome}
-                </span>
-              )}
-              {template && (
-                <button type="button" onClick={removerTemplate} style={{
-                  background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 12, padding: 0,
-                }}>
-                  Remover
-                </button>
-              )}
-            </div>
-            {!template && (
-              <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 8 }}>
-                Importe um arquivo .docx com marcadores como <code style={{ background: "var(--surface-2)", padding: "1px 4px", borderRadius: 3 }}>{"{nome}"}</code>, <code style={{ background: "var(--surface-2)", padding: "1px 4px", borderRadius: 3 }}>{"{cpf}"}</code>, etc. O documento será preenchido automaticamente ao gerar a publicação.
-              </p>
-            )}
+            <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: 0 }}>
+              O diploma (.docx) é gerado com os dados abaixo, o QR Code e o código de validação desta publicação.
+            </p>
           </div>
         )}
 
@@ -1291,6 +1419,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             <Field label="RG/RNE/RA" value={form.rg} onChange={setField("rg", maskRG)} placeholder="000000000000-0" />
             {isEstacio && <Field label="Órgão Expedidor" value={form.orgaoExpedidor} onChange={setField("orgaoExpedidor", up)} placeholder="SSP/SP" />}
             {isEstacio && <Field label="Nacionalidade" value={form.nacionalidade} onChange={setField("nacionalidade", up)} placeholder="BRASILEIRO(A)" />}
+            {isEstacio && <Field label="Naturalidade" value={form.naturalidade} onChange={setField("naturalidade", up)} placeholder="SÃO PAULO" />}
             <Field label="Nome da Mãe" value={form.nomeMae} onChange={setField("nomeMae", up)} />
             <Field label="Nome do Pai" value={form.nomePai} onChange={setField("nomePai", up)} />
             <Field label="Observações" value={form.observacao} onChange={setField("observacao", up)} full />
@@ -1325,7 +1454,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
         <div className="edit-section">
           <div className="edit-section-title">Resumo da Publicação</div>
           <div className="edit-grid">
-            <Field label="Curso" value={form.curso} onChange={setField("curso", up)} full />
+            <Field label="Curso" value={form.curso} onChange={setField("curso", up)} full
+              placeholder={isEstacio ? "GESTÃO DE TURISMO (o prefixo do curso é montado pelo título)" : undefined} />
+            {isEstacio && <Field label="Reconhecimento do Curso" value={form.cursoReconhecimento} onChange={setField("cursoReconhecimento")} placeholder="Portaria MEC n° 967, de 01/09/2017, DOU n° 170, Seção 1, Pág. 17, de 04/09/2017." full />}
             {isEstacio && (
               <div className="field-group">
                 <label className="edit-label">Título/Grau Conferido</label>
@@ -1342,17 +1473,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
             <Field label="Ano de Conclusão" value={form.anoConclusao} onChange={setField("anoConclusao")} />
             <Field label="Data de Conclusão do Curso" value={form.dataPublicacao} onChange={setField("dataPublicacao", maskData)} placeholder="DD/MM/AAAA" />
             {isEstacio && <Field label="Data da Colação de Grau" value={form.dataColacao} onChange={setField("dataColacao", maskData)} placeholder="DD/MM/AAAA" />}
-            <Field label="Protocolo" value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
+            <Field label={isEstacio ? "Protocolo (número do verso)" : "Protocolo"} value={form.protocolo} onChange={setField("protocolo")} full placeholder="Deixe em branco para gerar automaticamente" />
           </div>
         </div>
+        {isEstacio && <SecaoRegistroEstacio form={form} sf={setField} />}
       </div>
       <div className="edit-footer">
         {erro ? <span style={{ color: "#f87171", fontSize: 13 }}>{erro}</span> : <span />}
         <div className="edit-actions">
-          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => setForm(formVazio)}>
+          <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => setForm(vazio)}>
             {editando ? "Cancelar edição" : "Limpar"}
           </button>
-          <button type="submit" className="btn-primary" disabled={salvando}>
+          <button type="submit" className="btn-primary" disabled={salvando || (isEstacio && templateStatus !== "ok")}>
             {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Gerar Publicação"}
           </button>
         </div>
@@ -1540,6 +1672,13 @@ export default function Publicacao() {
     return true;
   }
 
+  async function editarComDiploma(c: Cliente) {
+    if (grupo !== "estacio") { await editarCliente(c); return; }
+    const publicado = await publicarDocxEstacio(c).catch((e) => { console.error("[diploma]", e); return null; });
+    if (!publicado?.docxUrl) window.alert("Dados salvos, mas o diploma (.docx) não foi regenerado. Edite pela aba NOVO para tentar novamente.");
+    await editarCliente(publicado?.docxUrl ? { ...c, docxUrl: publicado.docxUrl } : c);
+  }
+
   async function apagarCliente(c: Cliente) {
     const { error } = await supabase
       .from("publicacoes")
@@ -1598,7 +1737,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} onNovo={() => setActiveTab("novo")} onEditar={editarCliente} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
               {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} />}
               {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
