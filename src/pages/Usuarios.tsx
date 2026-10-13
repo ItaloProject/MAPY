@@ -11,7 +11,6 @@ type Usuario = {
   status: string;
   matricula: string | null;
   auth_user_id: string | null;
-  token_hash: string | null;
   ultimo_acesso: string | null;
   created_at: string;
 };
@@ -19,34 +18,6 @@ type Usuario = {
 type ModalTipo = "criar" | "suspender" | "reset" | "apagar" | "credenciais" | "qrs" | null;
 
 const PERFIS = ["Administrador", "Operador", "Suporte", "Visualizador"];
-
-// ── Criptografia ──────────────────────────────────────────────────────────
-async function sha256hex(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-function gerarToken(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-function baixarChaveCSV(matricula: string, token: string) {
-  const csv = [
-    "# e-MEC Chave de Acesso - CONFIDENCIAL - NAO COMPARTILHE",
-    "MATRICULA,TOKEN",
-    `${matricula},${token}`,
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = `emec_chave_${matricula}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 // ── Gerador de senha forte ─────────────────────────────────────────────────
 function gerarSenha(): string {
@@ -177,8 +148,6 @@ export default function Usuarios() {
 
     const matricula  = await gerarMatricula();
     const password   = gerarSenha();
-    const chaveToken = gerarToken();
-    const tokenHash  = await sha256hex(chaveToken);
 
     // Obtém token da sessão atual para chamar a API
     const { data: { session } } = await supabase.auth.getSession();
@@ -198,7 +167,7 @@ export default function Usuarios() {
       return;
     }
 
-    // Salva na tabela usuarios (com token_hash)
+    // Salva na tabela usuarios
     const { error } = await supabase.from("usuarios").insert({
       nome: form.nome.trim(),
       email: form.email.trim() || null,
@@ -206,7 +175,6 @@ export default function Usuarios() {
       status: "Ativo",
       matricula,
       auth_user_id: body.auth_user_id,
-      token_hash: tokenHash,
     });
 
     if (error) { setFormErr("Usuário criado no Auth mas erro ao salvar perfil: " + error.message); return; }
@@ -214,23 +182,10 @@ export default function Usuarios() {
     fecharModal();
     await carregar();
 
-    // Download automático da chave CSV
-    baixarChaveCSV(matricula, chaveToken);
-
     // Exibe modal de credenciais
     setCredMatricula(matricula);
     setCredSenha(password);
     setModal("credenciais");
-  }
-
-  // ── BAIXAR CHAVE (regenerar token) ─────────────────────────────────────────
-  async function baixarChave(u: Usuario) {
-    const novoToken = gerarToken();
-    const novoHash  = await sha256hex(novoToken);
-    const { error } = await supabase.from("usuarios").update({ token_hash: novoHash }).eq("id", u.id);
-    if (error) { showToast("Erro ao gerar chave."); return; }
-    baixarChaveCSV(u.matricula!, novoToken);
-    showToast(`Nova chave gerada para ${u.nome}.`);
   }
 
   // ── SUSPENDER / REATIVAR ───────────────────────────────────────────────────
@@ -544,12 +499,6 @@ export default function Usuarios() {
                             {u.status === "Ativo" ? "Suspender" : "Reativar"}
                           </ABtn>
                           <ABtn onClick={() => { setAlvo(u); setModal("reset"); }}>Resetar senha</ABtn>
-                          {u.matricula && (
-                            <ABtn color="#7DD43A" onClick={() => baixarChave(u)}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                              Chave
-                            </ABtn>
-                          )}
                           <ABtn color="#a78bfa" onClick={() => abrirQRs(u)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/>
