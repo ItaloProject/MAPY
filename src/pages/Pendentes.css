@@ -5,6 +5,28 @@
 .pnd-tile-value { font-size: 22px; font-weight: 800; line-height: 1.1; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
 .pnd-tile-sub { font-size: 11px; color: var(--fg-muted); }
 
+/* ── Seletor de grupo ── */
+.pnd-grupo-tabs {
+  display: flex; gap: 8px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--border); padding-bottom: 0;
+}
+.pnd-grupo-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 20px 12px; border: 0; background: transparent;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--fg-muted);
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .15s, border-color .15s;
+}
+.pnd-grupo-tab:hover { color: var(--fg); }
+.pnd-grupo-tab.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.pnd-grupo-tab.is-active.is-estacio { color: #10b981; border-bottom-color: #10b981; }
+.pnd-grupo-count {
+  font-size: 11px; font-weight: 700; background: var(--surface-2);
+  color: var(--fg-muted); padding: 1px 7px; border-radius: 20px;
+}
+.pnd-grupo-tab.is-active .pnd-grupo-count { background: rgba(var(--accent-rgb,99,102,241),.15); color: var(--accent); }
+.pnd-grupo-tab.is-active.is-estacio .pnd-grupo-count { background: rgba(16,185,129,.15); color: #10b981; }
+
 /* ── Abas ── */
 .pnd-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
 .pnd-tab {
@@ -54,6 +76,9 @@
   .pnd-tiles { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
   .pnd-tile { padding: 14px; }
   .pnd-tile-value { font-size: 19px; }
+
+  .pnd-grupo-tabs { gap: 0; }
+  .pnd-grupo-tab { flex: 1; justify-content: center; padding: 10px 8px 12px; font-size: 13px; }
 
   .pnd-tabs { gap: 8px; }
   .pnd-tab { flex: 1; min-height: 46px; padding: 8px 10px; font-size: 14px; border-radius: 10px; }

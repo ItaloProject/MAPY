@@ -19,7 +19,10 @@ interface Pub {
   pagamento_data: string | null;
   agendamento_data: string | null;
   created_at: string;
+  grupo: string;
 }
+
+type Grupo = "publicacao" | "estacio";
 
 type ModalTipo = "marcarPago" | "agendar" | "editarValor" | "reverter" | "apagar" | null;
 
@@ -45,6 +48,7 @@ export default function Pendentes() {
   const isAdmin = useIsAdmin();
   const [pubs,     setPubs]     = useState<Pub[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [grupo,    setGrupo]    = useState<Grupo>("publicacao");
   const [aba,      setAba]      = useState<"pendente" | "pago">("pendente");
   const [modal,    setModal]    = useState<ModalTipo>(null);
   const [alvo,     setAlvo]     = useState<Pub | null>(null);
@@ -62,7 +66,7 @@ export default function Pendentes() {
     setLoading(true);
     const { data } = await supabase
       .from("publicacoes")
-      .select("id,pub_id,nome,cpf,protocolo,data,curso,valor,pagamento_status,pagamento_data,agendamento_data,created_at")
+      .select("id,pub_id,nome,cpf,protocolo,data,curso,valor,pagamento_status,pagamento_data,agendamento_data,created_at,grupo")
       .order("created_at", { ascending: false });
     setPubs((data ?? []) as Pub[]);
     setLoading(false);
@@ -163,11 +167,12 @@ export default function Pendentes() {
   }
 
   // ── Derivados ─────────────────────────────────────────────────────────────
-  const pendentes = pubs.filter(p => p.pagamento_status === "pendente");
-  const pagos     = pubs.filter(p => p.pagamento_status === "pago");
-  const totalPend = pendentes.reduce((s, p) => s + (p.valor ?? 100), 0);
-  const totalPago = pagos.reduce((s, p) => s + (p.valor ?? 100), 0);
-  const lista = aba === "pendente" ? pendentes : pagos;
+  const grupoAtual = pubs.filter(p => p.grupo === grupo);
+  const pendentes  = grupoAtual.filter(p => p.pagamento_status === "pendente");
+  const pagos      = grupoAtual.filter(p => p.pagamento_status === "pago");
+  const totalPend  = pendentes.reduce((s, p) => s + (p.valor ?? 100), 0);
+  const totalPago  = pagos.reduce((s, p) => s + (p.valor ?? 100), 0);
+  const lista      = aba === "pendente" ? pendentes : pagos;
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: 10, color: "var(--fg-muted)" }}>
@@ -299,6 +304,32 @@ export default function Pendentes() {
       <div className="page-header">
         <h1 className="page-title">Pendentes</h1>
         <p className="page-sub">Controle de pagamentos por publicação gerada</p>
+      </div>
+
+      {/* Seletor de grupo */}
+      <div className="pnd-grupo-tabs">
+        <button
+          className={`pnd-grupo-tab${grupo === "publicacao" ? " is-active" : ""}`}
+          onClick={() => { setGrupo("publicacao"); setAba("pendente"); }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Publicação
+          <span className="pnd-grupo-count">{pubs.filter(p => p.grupo === "publicacao").length}</span>
+        </button>
+        <button
+          className={`pnd-grupo-tab${grupo === "estacio" ? " is-active is-estacio" : ""}`}
+          onClick={() => { setGrupo("estacio"); setAba("pendente"); }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M7 8h10M7 12h10M7 16h6"/>
+          </svg>
+          Estácio
+          <span className="pnd-grupo-count">{pubs.filter(p => p.grupo === "estacio").length}</span>
+        </button>
       </div>
 
       {/* Métricas */}
