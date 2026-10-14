@@ -137,8 +137,8 @@ export default function Controle() {
     setRegistros(prev => prev.filter(r => r.id !== id));
   }
 
-  const pendentes  = registros.filter(r => r.controle_status === "Pendente");
-  const concluidos = registros.filter(r => r.controle_status === "Concluído");
+  const pendentes  = registros.filter(r => !publicados.has(r.id));
+  const concluidos = registros.filter(r => publicados.has(r.id));
   const lista = (aba === "Pendente" ? pendentes : concluidos)
     .filter(r => r.nome.toLowerCase().includes(search.toLowerCase()) || (r.cpf ?? "").includes(search));
 
