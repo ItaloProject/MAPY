@@ -137,8 +137,19 @@ export default function Controle() {
     setRegistros(prev => prev.filter(r => r.id !== id));
   }
 
-  const pendentes  = registros.filter(r => !publicados.has(r.id));
   const concluidos = registros.filter(r => publicados.has(r.id));
+
+  // CPFs e nomes já concluídos para deduplicar pendentes
+  const cpfsConc  = new Set(concluidos.map(r => r.cpf?.replace(/\D/g, "")).filter((v): v is string => !!v && v.length === 11));
+  const nomesConc = new Set(concluidos.map(r => r.nome.trim().replace(/\s+/g, " ").toUpperCase()));
+  const pendentes = registros.filter(r => {
+    if (publicados.has(r.id)) return false;
+    const cpf = r.cpf?.replace(/\D/g, "") ?? "";
+    if (cpf.length === 11 && cpfsConc.has(cpf)) return false;
+    if (nomesConc.has(r.nome.trim().replace(/\s+/g, " ").toUpperCase())) return false;
+    return true;
+  });
+
   const lista = (aba === "Pendente" ? pendentes : concluidos)
     .filter(r => r.nome.toLowerCase().includes(search.toLowerCase()) || (r.cpf ?? "").includes(search));
 
