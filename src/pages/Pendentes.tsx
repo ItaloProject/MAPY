@@ -24,7 +24,7 @@ interface Pub {
 
 type Grupo = "publicacao" | "estacio";
 
-type ModalTipo = "marcarPago" | "agendar" | "editarValor" | "reverter" | "apagar" | null;
+type ModalTipo = "marcarPago" | "agendar" | "editarValor" | "reverter" | "apagar" | "definirTodos" | null;
 
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -59,6 +59,7 @@ export default function Pendentes() {
   const [novoValor,      setNovoValor]      = useState("");
   const [dataAgendamento, setDataAgendamento] = useState("");
   const [dataPagamento,   setDataPagamento]   = useState("");
+  const [valorTodos,      setValorTodos]      = useState("");
 
   useEffect(() => { carregar(); }, []);
 
@@ -164,6 +165,25 @@ export default function Pendentes() {
     setPubs(prev => prev.filter(p => p.id !== alvo.id));
     fecharModal();
     showToast(`Registro de ${nome} apagado.`);
+  }
+
+  // ── Definir valor para todos ──────────────────────────────────────────────
+  async function salvarValorTodos() {
+    const v = parseFloat(valorTodos.replace(",", "."));
+    if (isNaN(v) || v <= 0) return;
+    setSaving(true);
+    const ids = lista.map(p => p.id);
+    const { data: atualizados } = await supabase
+      .from("publicacoes")
+      .update({ valor: v })
+      .in("id", ids)
+      .select();
+    if (atualizados) {
+      const map = new Map((atualizados as Pub[]).map(p => [p.id, p]));
+      setPubs(prev => prev.map(p => map.has(p.id) ? map.get(p.id)! : p));
+    }
+    fecharModal();
+    showToast(`Valor R$ ${fmt(v)} aplicado a ${ids.length} registro${ids.length !== 1 ? "s" : ""}.`);
   }
 
   // ── Derivados ─────────────────────────────────────────────────────────────
@@ -281,6 +301,35 @@ export default function Pendentes() {
               </>
             )}
 
+            {/* DEFINIR VALOR PARA TODOS */}
+            {modal === "definirTodos" && (
+              <>
+                <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "var(--fg)" }}>Definir valor para todos</h3>
+                <p style={{ margin: "0 0 20px", fontSize: 13, color: "var(--fg-muted)" }}>
+                  Aplica o mesmo valor a <strong style={{ color: "var(--fg)" }}>{lista.length} registro{lista.length !== 1 ? "s" : ""}</strong> da aba atual.
+                </p>
+                <div>
+                  <label style={labelStyle}>Valor (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={valorTodos}
+                    onChange={e => setValorTodos(e.target.value)}
+                    placeholder="6000.00"
+                    style={inputStyle}
+                    autoFocus
+                  />
+                </div>
+                <div className="pnd-actions" style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
+                  <button onClick={fecharModal} style={btnSecStyle}>Cancelar</button>
+                  <button onClick={salvarValorTodos} disabled={saving || !valorTodos} style={btnPrimStyle}>
+                    {saving ? "Salvando…" : `Aplicar a ${lista.length} registro${lista.length !== 1 ? "s" : ""}`}
+                  </button>
+                </div>
+              </>
+            )}
+
             {/* APAGAR */}
             {modal === "apagar" && alvo && (
               <>
@@ -340,14 +389,28 @@ export default function Pendentes() {
         <Tile label="Total recebido"       value={`R$ ${fmt(totalPago)}`}              sub="receita total"   color="var(--accent)" />
       </div>
 
-      {/* Abas */}
-      <div className="pnd-tabs">
-        {(["pendente", "pago"] as const).map(t => (
-          <button key={t} onClick={() => setAba(t)} className={`pnd-tab${aba === t ? " is-active" : ""}`}>
-            {t === "pendente" ? "Pendentes" : "Recebidos"}
-            <span className="pnd-tab-count">{t === "pendente" ? pendentes.length : pagos.length}</span>
+      {/* Abas + botão definir valor */}
+      <div className="pnd-tabs-row">
+        <div className="pnd-tabs">
+          {(["pendente", "pago"] as const).map(t => (
+            <button key={t} onClick={() => setAba(t)} className={`pnd-tab${aba === t ? " is-active" : ""}`}>
+              {t === "pendente" ? "Pendentes" : "Recebidos"}
+              <span className="pnd-tab-count">{t === "pendente" ? pendentes.length : pagos.length}</span>
+            </button>
+          ))}
+        </div>
+        {isAdmin && lista.length > 0 && (
+          <button
+            className="pnd-btn-valor-todos"
+            onClick={() => { setValorTodos(""); setModal("definirTodos"); }}
+            title="Definir o mesmo valor para todos os registros desta aba"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            Definir valor para todos
           </button>
-        ))}
+        )}
       </div>
 
       {/* Lista */}

@@ -28,7 +28,17 @@
 .pnd-grupo-tab.is-active.is-estacio .pnd-grupo-count { background: rgba(16,185,129,.15); color: #10b981; }
 
 /* ── Abas ── */
-.pnd-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.pnd-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.pnd-tabs { display: flex; gap: 4px; }
+.pnd-btn-valor-todos {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 8px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--fg-muted); font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.pnd-btn-valor-todos:hover { border-color: var(--accent); color: var(--accent); }
 .pnd-tab {
   padding: 8px 20px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--fg-muted);
   font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
@@ -80,8 +90,10 @@
   .pnd-grupo-tabs { gap: 0; }
   .pnd-grupo-tab { flex: 1; justify-content: center; padding: 10px 8px 12px; font-size: 13px; }
 
+  .pnd-tabs-row { gap: 8px; }
   .pnd-tabs { gap: 8px; }
   .pnd-tab { flex: 1; min-height: 46px; padding: 8px 10px; font-size: 14px; border-radius: 10px; }
+  .pnd-btn-valor-todos { width: 100%; justify-content: center; min-height: 40px; }
 
   .pnd-card--list { background: none; border: 0; border-radius: 0; overflow: visible; margin-bottom: 0; }
   .pnd-scroll { overflow: visible; }
