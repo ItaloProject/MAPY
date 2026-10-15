@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import "../components/Layout.css";
 import "./Encurtador.css";
 import { supabase } from "../lib/supabase";
+import { SLUG_RE, criarLinkCurto, destinoValido, linkCurtoUrl as linkCurto } from "../lib/links";
 
 type Link = {
   slug: string;
@@ -10,26 +11,6 @@ type Link = {
   created_at: string;
   updated_at: string;
 };
-
-const SLUG_RE = /^[A-Za-z0-9_-]{3,40}$/;
-// Sem letras ambíguas (l, I, 0, O, 1) para o código ser fácil de digitar
-const ALFABETO = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function gerarSlug(tamanho = 6): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(tamanho));
-  return Array.from(bytes, b => ALFABETO[b % ALFABETO.length]).join("");
-}
-
-function destinoValido(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-const linkCurto = (slug: string) => `${window.location.origin}/g/${slug}`;
 
 const fmtData = (iso: string) => new Date(iso).toLocaleString("pt-BR");
 
@@ -40,19 +21,6 @@ async function copiarTexto(texto: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// Insere o link. Sem apelido, gera um código aleatório e tenta de novo se ele já existir.
-async function inserirLink(target: string, apelido: string): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  for (let tentativa = 0; tentativa < 5; tentativa++) {
-    const slug = apelido || gerarSlug();
-    const { error } = await supabase.from("links").insert({ slug, target, created_by: user?.id ?? null });
-    if (!error) return slug;
-    if (error.code !== "23505") throw new Error("Erro ao criar o link: " + error.message);
-    if (apelido) throw new Error("Esse apelido já está em uso.");
-  }
-  throw new Error("Não consegui gerar um código livre. Tente de novo.");
 }
 
 export default function Encurtador() {
@@ -120,7 +88,7 @@ export default function Encurtador() {
     }
     setCriando(true);
     try {
-      const slug = await inserirLink(target, apelidoLimpo);
+      const slug = await criarLinkCurto(target, apelidoLimpo);
       setCriado(slug);
       setDestino("");
       setApelido("");

@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
 import { carregarRascunho, salvarRascunho, apagarRascunho, type Rascunho } from "../lib/rascunhos";
 import { duplicarHistoricoEscolar } from "../lib/historicoEscolar";
+import { criarLinkCurto, removerLinkCurto, linkCurtoUrl } from "../lib/links";
 import HistoricoRegistros from "./HistoricoRegistros";
 import "../components/Layout.css";
 import "./Publicacao.css";
@@ -2452,11 +2453,27 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
 
     setSalvando(true);
     const comDiploma = isEstacio ? await gerarDiploma(novo) : null;
+
+    // Encurtador: cria o link curto desta publicação e já o usa no QR (o destino pode ser editado depois).
+    // Se falhar, a publicação segue normalmente com o endereço direto.
+    let slugCurto = "";
+    if (!isEstacio) {
+      try {
+        slugCurto = await criarLinkCurto(url);
+      } catch (e) {
+        console.error("[link-curto/auto]", e);
+        setAvisoCopia("Publicação gerada sem link curto (o QR usa o endereço direto). Crie o link na página Encurtador.");
+      }
+    }
     setSalvando(false);
     if (isEstacio && !comDiploma) return;
 
-    const novoFinal = comDiploma ?? novo;
+    const novoFinal = comDiploma ?? (slugCurto ? { ...novo, urlCurta: linkCurtoUrl(slugCurto) } : novo);
     const gravando = onGerar(novoFinal);
+    if (slugCurto) {
+      // Publicação não foi salva: não deixa o link órfão no Encurtador.
+      void Promise.resolve(gravando).then(ok => { if (ok === false) void removerLinkCurto(slugCurto); });
+    }
     if (isEstacio && credenciaisNovas) {
       const matriculaDiploma = matriculaDoDiploma(novoFinal);
       await vincularAcesso(novoFinal, { matricula: matriculaDiploma, senha: credenciaisNovas.senha });
@@ -2548,7 +2565,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
 
   if (gerado) return (
     <div className="tab-body" style={{ position: "relative" }}>
-      <QRCapture pubId={gerado.pubId} url={gerado.url} />
+      <QRCapture pubId={gerado.pubId} url={urlDoQr(gerado)} />
 
       <div style={{ maxWidth: 600, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20, alignItems: "center", textAlign: "center" }}>
         <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(52,211,153,0.12)", border: "2px solid #34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -2580,8 +2597,20 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
         </div>
 
         <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
-          <QRCodeSVG value={gerado.url} size={245} {...QR_STYLE} />
+          <QRCodeSVG value={urlDoQr(gerado)} size={245} {...QR_STYLE} />
         </div>
+
+        {gerado.urlCurta && (
+          <div style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }}>
+            <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 4 }}>
+              Link curto do QR (o destino pode ser trocado na página Encurtador)
+            </div>
+            <a href={gerado.urlCurta} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 12, color: "var(--accent)", wordBreak: "break-all" }}>
+              {gerado.urlCurta}
+            </a>
+          </div>
+        )}
 
         <div style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px" }}>
           <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 4 }}>Link da publicação</div>
