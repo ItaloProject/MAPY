@@ -155,10 +155,10 @@ export function dadosIniciais(ficha: FichaAluno): DadosHistoricoEscolar {
 }
 
 // O modelo já imprime o rótulo e as aspas do título; sem isso o texto sairia duplicado.
-export function limparTituloTcc(texto: string): string {
-  return texto
-    .replace(/^\s*t[ií]tulo(?:\s+d[aoe]s?\s+[^:]*?)?\s*:\s*/i, "")
-    .replace(/^[“"\s]+|[”"\s]+$/g, "");
+// aparar=false: usado enquanto digita, para não engolir o espaço que acabou de ser teclado no fim.
+export function limparTituloTcc(texto: string, aparar = true): string {
+  const semRotulo = texto.replace(/^\s*t[ií]tulo(?:\s+d[aoe]s?\s+[^:]*?)?\s*:\s*/i, "");
+  return semRotulo.replace(aparar ? /^[“"\s]+|[”"\s]+$/g : /^[“"\s]+/, "");
 }
 
 function notaDoTcc(t2: Disciplina[]): string {

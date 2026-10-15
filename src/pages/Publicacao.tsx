@@ -911,6 +911,7 @@ interface Cliente {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; anoConclusao: string;
   protocolo: string; url: string; docxUrl: string;
+  urlCurta?: string;
   naturalidade: string; cidadeExpedicao: string; dataExpedicao: string;
   registroNumero: string; registroLivro: string; registroFolha: string; registroData: string; registroProcesso: string;
   cursoReconhecimento: string;
@@ -926,6 +927,7 @@ type DBRow = {
   instituicao: string; inep: string; endereco: string; bairro: string;
   municipio: string; cep: string; modalidade: string; ano_conclusao: string; protocolo: string; url: string;
   docx_url?: string;
+  url_curta?: string | null;
   naturalidade?: string; cidade_expedicao?: string; data_expedicao?: string;
   registro_numero?: string; registro_livro?: string; registro_folha?: string; registro_data?: string; registro_processo?: string;
   curso_reconhecimento?: string;
@@ -951,6 +953,7 @@ function rowToCliente(r: DBRow): Cliente {
     anoConclusao: r.ano_conclusao, protocolo: r.protocolo,
     url: r.pub_id.startsWith(PREFIXO_CODIGO_ESTACIO) ? `${DIPLOMA_BASE}/${r.pub_id}` : r.url,
     docxUrl: r.docx_url ?? "",
+    urlCurta: r.url_curta ?? "",
     naturalidade: r.naturalidade ?? "",
     cidadeExpedicao: r.cidade_expedicao ?? "",
     dataExpedicao: r.data_expedicao ?? "",
@@ -979,6 +982,8 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     municipio: c.municipio, cep: c.cep, modalidade: c.modalidade,
     ano_conclusao: c.anoConclusao, protocolo: c.protocolo, url: c.url,
     docx_url: c.docxUrl || undefined,
+    // Só vai no payload quando preenchido: assim, antes da migração 022, salvar um registro continua funcionando.
+    ...(c.urlCurta ? { url_curta: c.urlCurta } : {}),
     naturalidade: c.naturalidade || undefined,
     cidade_expedicao: c.cidadeExpedicao || undefined,
     data_expedicao: c.dataExpedicao || undefined,
@@ -990,6 +995,9 @@ function clienteToRow(c: Omit<Cliente, "id">): Omit<DBRow, "id"> {
     curso_reconhecimento: c.cursoReconhecimento || undefined,
   };
 }
+
+// O QR usa o link curto quando existe; senão, o endereço da própria página.
+const urlDoQr = (c: Pick<Cliente, "url" | "urlCurta">) => c.urlCurta || c.url;
 
 const statusChip: Record<string, string> = {
   Publicado: "chip--green", Pendente: "chip--yellow", Rascunho: "chip--gray",
@@ -1339,22 +1347,58 @@ function QRDisplay({ cliente, size = 245 }: { cliente: Cliente; size?: number })
       <p style={{ fontSize: 13 }}>QR Code não gerado ainda.<br />Gere a publicação primeiro na aba NOVO.</p>
     </div>
   );
-  return <QRCodeSVG value={cliente.url} size={size} {...QR_STYLE} />;
+  return <QRCodeSVG value={urlDoQr(cliente)} size={size} {...QR_STYLE} />;
+}
+
+function linkCurtoValido(v: string): boolean {
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch { return false; }
 }
 
 /* ── Modal QR ── */
-function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }) {
+// onSalvarLinkCurto devolve "" quando salvou, ou a mensagem de erro.
+function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
+  cliente: Cliente; onClose: () => void; onSalvarLinkCurto?: (urlCurta: string) => Promise<string>;
+}) {
   const [copiado, setCopiado] = useState(false);
+  const [copiadoDestino, setCopiadoDestino] = useState(false);
+  const [linkCurto, setLinkCurto] = useState(cliente.urlCurta ?? "");
+  const [salvandoLink, setSalvandoLink] = useState(false);
+  const [erroLink, setErroLink] = useState("");
+  const qrUrl = urlDoQr(cliente);
+
   async function compartilhar() {
-    const dados = { title: "Publicação e-MEC", text: `Publicação de ${cliente.nome}`, url: cliente.url };
+    const dados = { title: "Publicação e-MEC", text: `Publicação de ${cliente.nome}`, url: qrUrl };
     try {
       if (navigator.share) await navigator.share(dados);
       else {
-        await navigator.clipboard.writeText(cliente.url);
+        await navigator.clipboard.writeText(qrUrl);
         setCopiado(true);
         setTimeout(() => setCopiado(false), 2000);
       }
     } catch { /* cancelado pelo usuário */ }
+  }
+
+  async function copiarDestino() {
+    try {
+      await navigator.clipboard.writeText(cliente.url);
+      setCopiadoDestino(true);
+      setTimeout(() => setCopiadoDestino(false), 2000);
+    } catch { /* sem permissão da área de transferência */ }
+  }
+
+  async function salvarLink() {
+    if (!onSalvarLinkCurto) return;
+    const v = linkCurto.trim();
+    if (v && !linkCurtoValido(v)) { setErroLink("Cole o endereço completo, começando com https://"); return; }
+    setErroLink("");
+    setSalvandoLink(true);
+    const erro = await onSalvarLinkCurto(v);
+    setSalvandoLink(false);
+    if (erro) setErroLink(erro);
+    else setLinkCurto(v);
   }
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -1410,7 +1454,7 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
             <>
               {/* SVG oculto para download: versão 8 (49 módulos), sem borda */}
               <div style={{ position: "absolute", left: -9999, top: -9999, pointerEvents: "none" }}>
-                <QRCodeSVG ref={svgRef} value={cliente.url} size={490} {...QR_STYLE} />
+                <QRCodeSVG ref={svgRef} value={qrUrl} size={490} {...QR_STYLE} />
               </div>
               <div style={{ background: "#fff", padding: 16, borderRadius: 4, display: "inline-block", border: "1px solid #e5e5e5" }}>
                 <QRDisplay cliente={cliente} />
@@ -1419,11 +1463,39 @@ function ModalQR({ cliente, onClose }: { cliente: Cliente; onClose: () => void }
                 <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 6 }}>
                   Escaneie para acessar o arquivo do aluno
                 </div>
-                <a href={cliente.url} target="_blank" rel="noopener noreferrer"
+                <a href={qrUrl} target="_blank" rel="noopener noreferrer"
                   style={{ fontSize: 11, color: "var(--accent)", wordBreak: "break-all" }}>
-                  {cliente.url}
+                  {qrUrl}
                 </a>
+                {cliente.urlCurta && (
+                  <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>Link curto ativo no QR</div>
+                )}
               </div>
+              {onSalvarLinkCurto && (
+                <div style={{ width: "100%", borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>Link curto do QR (opcional)</div>
+                  <div style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                    Crie o link curto no encurtador (ex.: TinyURL) apontando para o destino abaixo e cole aqui.
+                    O QR passa a usar o link curto; para mudar o destino depois, edite no encurtador, sem trocar o QR.
+                    Em branco e Salvar volta ao endereço normal.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <code style={{ flex: 1, fontSize: 11, wordBreak: "break-all", color: "var(--fg-muted)" }}>{cliente.url}</code>
+                    <button type="button" className="btn-sm" onClick={() => void copiarDestino()}>
+                      {copiadoDestino ? "Copiado ✓" : "Copiar destino"}
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="edit-input" style={{ flex: 1 }} placeholder="https://tinyurl.com/..."
+                      value={linkCurto} onChange={e => { setLinkCurto(e.target.value); setErroLink(""); }} />
+                    <button type="button" className="btn-sm" disabled={salvandoLink || linkCurto.trim() === (cliente.urlCurta ?? "")}
+                      onClick={() => void salvarLink()}>
+                      {salvandoLink ? "Salvando..." : "Salvar"}
+                    </button>
+                  </div>
+                  {erroLink && <span style={{ fontSize: 12, color: "#f87171" }}>{erroLink}</span>}
+                </div>
+              )}
             </>
           ) : (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fg-muted)" }}>
@@ -1700,12 +1772,13 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onApagar, onToggleAtivo, onToggleAtivoLote }: {
+function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto, onApagar, onToggleAtivo, onToggleAtivoLote }: {
   clientes: Cliente[];
   isAdmin: boolean;
   estacio: boolean;
   onNovo: () => void;
   onEditar: (c: Cliente) => void;
+  onLinkCurto: (c: Cliente, urlCurta: string) => Promise<string>;
   onApagar: (c: Cliente) => void | Promise<void>;
   onToggleAtivo: (c: Cliente) => void | Promise<void>;
   onToggleAtivoLote: (pubIds: string[], ativo: boolean) => void | Promise<void>;
@@ -1742,7 +1815,17 @@ function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onApagar, o
 
   return (
     <div className="tab-body">
-      {qrCliente && <ModalQR cliente={qrCliente} onClose={() => setQrCliente(null)} />}
+      {qrCliente && (
+        <ModalQR
+          cliente={qrCliente}
+          onClose={() => setQrCliente(null)}
+          onSalvarLinkCurto={estacio ? undefined : async urlCurta => {
+            const erro = await onLinkCurto(qrCliente, urlCurta);
+            if (!erro) setQrCliente({ ...qrCliente, urlCurta });
+            return erro;
+          }}
+        />
+      )}
       {editCliente && (
         <ModalEditar
           cliente={editCliente}
@@ -2997,6 +3080,23 @@ export default function Publicacao() {
     return true;
   }
 
+  // Devolve "" quando salvou, ou a mensagem de erro.
+  async function salvarLinkCurto(c: Cliente, urlCurta: string): Promise<string> {
+    const { error } = await supabase
+      .from("publicacoes")
+      .update({ url_curta: urlCurta || null })
+      .eq("pub_id", c.pubId);
+    if (error) {
+      console.error("[link-curto]", error);
+      const semColuna = error.code === "42703" || error.code === "PGRST204" || /url_curta/i.test(error.message);
+      return semColuna
+        ? "Banco sem a coluna do link curto: aplique a migração 022_url_curta.sql no Supabase."
+        : "Não foi possível salvar o link curto. Tente novamente.";
+    }
+    setClientes(prev => prev.map(x => x.pubId === c.pubId ? { ...x, urlCurta } : x));
+    return "";
+  }
+
   async function editarComDiploma(c: Cliente) {
     if (grupo !== "estacio") { await editarCliente(c); return; }
     const publicado = await publicarDocxEstacio(c).catch((e) => { console.error("[diploma]", e); return null; });
@@ -3062,7 +3162,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onLinkCurto={salvarLinkCurto} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
               {activeTab === "novo"       && <TabNovo key={grupo} clientes={clientes} onGerar={adicionarCliente} onEditar={editarCliente} prefill={prefill} grupo={grupo} rascunhoDb={rascunhoDb} autor={usuario?.nome} onRascunhoConcluido={() => setRascunhoDb(null)} editarPubId={pubEditarUrl} duplicarPubId={pubDuplicarUrl} onVerHistorico={abrirHistorico} />}
               {activeTab === "historico"  && (
                 <HistoricoRegistros

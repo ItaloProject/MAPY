@@ -41,13 +41,13 @@ function dataHora(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function Campo({ rotulo, valor, onChange, largo, placeholder, dica }: {
-  rotulo: string; valor: string; onChange: (v: string) => void; largo?: boolean; placeholder?: string; dica?: string;
+function Campo({ rotulo, valor, onChange, onBlur, largo, placeholder, dica }: {
+  rotulo: string; valor: string; onChange: (v: string) => void; onBlur?: () => void; largo?: boolean; placeholder?: string; dica?: string;
 }) {
   return (
     <label className={`he-campo ${largo ? "he-campo--largo" : ""}`}>
       <span className="he-campo-rotulo">{rotulo}</span>
-      <input className="edit-input" value={valor} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+      <input className="edit-input" value={valor} placeholder={placeholder} onChange={e => onChange(e.target.value)} onBlur={onBlur} />
       {dica && <span className="he-campo-dica">{dica}</span>}
     </label>
   );
@@ -492,7 +492,9 @@ export default function HistoricoEscolar({ grupo, pubId, ficha, copiaveis, onSal
             <section className="he-secao">
               <header className="he-secao-cab"><h3>Fechamento</h3><span>Bloco final do histórico</span></header>
               <div className="he-campos">
-                <Campo rotulo="Título do trabalho de conclusão" valor={dados.titulo_tcc} onChange={v => definir("titulo_tcc", limparTituloTcc(v))} largo />
+                <Campo rotulo="Título do trabalho de conclusão" valor={dados.titulo_tcc} largo
+                  onChange={v => definir("titulo_tcc", limparTituloTcc(v, false))}
+                  onBlur={() => definir("titulo_tcc", limparTituloTcc(dados.titulo_tcc))} />
                 <Campo rotulo="Nota do trabalho" valor={dados.nota_tcc} placeholder="10" onChange={v => definir("nota_tcc", v)} />
                 <Campo rotulo="Orientador (a)" valor={dados.orientador} placeholder="Dra. Nome Sobrenome" onChange={v => definir("orientador", v)} />
               </div>
