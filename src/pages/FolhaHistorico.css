@@ -1,0 +1,73 @@
+/* Folha do histórico escolar — coordenadas em pt, medidas do modelo (A4 595,5 x 842 pt; margens 36 / 35,4 pt). */
+.he-papel {
+  width: 595.5pt; min-height: 842pt; box-sizing: border-box;
+  padding: 36pt 35.4pt 14pt; background: #fff; color: #000;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+.he-folha {
+  position: relative; width: 524.7pt; color: #000;
+  font-family: Arial, "Liberation Sans", Helvetica, sans-serif; font-size: 9pt; line-height: 10.35pt;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+
+.he-cab { position: relative; height: 242.75pt; }
+.he-logo { position: absolute; left: 218.5pt; top: 0; width: 86.94pt; height: 68.98pt; display: block; }
+.he-assinatura { position: absolute; left: 349.6pt; top: 34.79pt; width: 149.25pt; height: 107.25pt; display: block; }
+
+.he-p { position: absolute; margin: 0; white-space: normal; overflow-wrap: anywhere; }
+.he-p--assinante { left: 349.2pt; top: 123pt; width: 152.1pt; white-space: nowrap; }
+.he-p--c1 { left: 6.1pt; width: 149.15pt; }
+.he-p--c2 { left: 177.85pt; width: 90.7pt; }
+.he-p--c3 { left: 349.55pt; width: 130pt; }
+.he-p--duas { line-height: 16.2pt; }
+
+.he-caixa {
+  position: absolute; left: 3.65pt; top: 170.85pt; width: 516.75pt; height: 65.8pt; box-sizing: border-box;
+  border: 1.5pt solid #000;
+}
+.he-caixa-int { position: relative; left: -0.75pt; top: -0.75pt; }
+.he-caixa-titulo { margin: 6.55pt 0 0; text-align: center; font-weight: bold; font-size: 15pt; line-height: 17.25pt; }
+.he-caixa-linha { margin: 0; padding-left: 2.25pt; }
+.he-caixa-linha--1 { margin-top: 4.6pt; }
+.he-caixa-linha--2 { margin-top: 5.9pt; }
+
+.he-tab {
+  border-collapse: collapse; table-layout: fixed; width: 515.05pt; margin-left: 5.35pt;
+  font-size: 9pt; line-height: 10.35pt;
+}
+.he-tab--2 { margin-top: 1.75pt; }
+.he-tab td, .he-tab th {
+  padding: 1.65pt 0 0; vertical-align: top; overflow: hidden; text-align: left;
+  border-left: 1.5pt solid #000; border-right: 1.5pt solid #000;
+}
+.he-tab th {
+  background: #f1f1f1; font-weight: bold; height: 13.95pt; padding-top: 1.85pt;
+  border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000;
+}
+.he-tab tr { break-inside: avoid; page-break-inside: avoid; }
+.he-tab td { height: 13.95pt; }
+.he-tr--primeira td { height: 14.15pt; }
+.he-tr--ultima td, .he-tr--total td { height: 13.8pt; }
+.he-tr--ultima td { border-bottom: 1.5pt solid #000; }
+.he-tr--total td { border-bottom: 1.5pt solid #000; }
+.he-tab .he-tr--total td { height: 18.2pt; padding-top: 4.5pt; }
+
+.he-tab--1 th:nth-child(1), .he-tab--1 td:nth-child(1),
+.he-tab--2 th:nth-child(1), .he-tab--2 td:nth-child(1) { width: 44.95pt; }
+.he-tab th:nth-child(2), .he-tab td:nth-child(2) { width: 42.75pt; }
+.he-tab th:nth-child(3), .he-tab td:nth-child(3) { width: 272.7pt; }
+.he-tab th:nth-child(4), .he-tab td:nth-child(4) { width: 50.8pt; }
+.he-tab th:nth-child(5), .he-tab td:nth-child(5) { width: 35.35pt; }
+.he-tab th:nth-child(6), .he-tab td:nth-child(6) { width: 68.5pt; }
+
+.he-tab.he-fecho { margin-top: 10pt; }
+.he-tab.he-fecho td { border: 1pt solid #000; padding: 5pt 7pt; text-align: left; vertical-align: top; height: auto; }
+.he-tab.he-fecho td.he-fecho-a { width: 340pt; }
+.he-tab.he-fecho td.he-fecho-b { width: 173.05pt; }
+.he-tab.he-fecho .he-fecho-nome { display: block; margin-top: 4pt; }
+
+.he-tab .he-c-sem, .he-tab .he-c-ano, .he-tab .he-c-disc { padding-left: 4.5pt; }
+.he-h-sem { padding-left: 11.7pt; }
+.he-h-ano { padding-left: 12.6pt; }
+.he-tab th, .he-tab .he-c-num { text-align: center; }

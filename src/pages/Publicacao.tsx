@@ -4,6 +4,8 @@ import type { UsuarioLogado } from "../lib/usuario";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
+import { carregarRascunho, salvarRascunho, apagarRascunho, type Rascunho } from "../lib/rascunhos";
+import HistoricoRegistros from "./HistoricoRegistros";
 import "../components/Layout.css";
 import "./Publicacao.css";
 
@@ -992,11 +994,12 @@ const statusChip: Record<string, string> = {
   Publicado: "chip--green", Pendente: "chip--yellow", Rascunho: "chip--gray",
 };
 
-type Tab = "clientes" | "novo" | "historico" | "visualizar" | "acesso";
+type Tab = "clientes" | "novo" | "historico" | "publicados" | "visualizar" | "acesso";
 const TABS_BASE: { id: Tab; label: string }[] = [
   { id: "clientes",   label: "CLIENTES" },
   { id: "novo",       label: "NOVO" },
   { id: "historico",  label: "HISTÓRICO" },
+  { id: "publicados", label: "PUBLICADOS" },
   { id: "visualizar", label: "VISUALIZAR" },
 ];
 
@@ -1933,6 +1936,39 @@ const CAMPOS_DIPLOMA: [keyof typeof formVazio, string][] = [
   ["registroFolha", "Folhas"], ["registroData", "Data do Registro"],
 ];
 
+/* ── Progresso do rascunho ("Concluir mais tarde") ── */
+type CampoForm = keyof typeof formVazio;
+const CAMPOS_PROGRESSO_PUBLICACAO: [CampoForm, string][] = [
+  ["nome", "Nome do aluno"], ["cpf", "CPF"], ["nascimento", "Data de nascimento"], ["rg", "RG"],
+  ["nomeMae", "Nome da mãe"], ["instituicao", "Instituição"], ["endereco", "Endereço"], ["bairro", "Bairro"],
+  ["municipio", "Município"], ["cep", "CEP"], ["curso", "Curso"], ["dataPublicacao", "Data de conclusão"],
+];
+const CAMPOS_PROGRESSO_ESTACIO: [CampoForm, string][] = [
+  ["nome", "Nome do aluno"], ["cpf", "CPF"], ["nascimento", "Data de nascimento"], ["rg", "RG"],
+  ["orgaoExpedidor", "Órgão expedidor"], ["naturalidade", "Naturalidade"], ["sexo", "Sexo"],
+  ["instituicao", "Instituição"], ["endereco", "Endereço"], ["bairro", "Bairro"], ["municipio", "Município"],
+  ["cep", "CEP"], ["curso", "Curso"], ["dataPublicacao", "Data de conclusão"], ["dataColacao", "Data da colação"],
+  ["dataExpedicao", "Data de expedição"], ["registroData", "Data do registro"],
+];
+const TAMANHO_DATA: CampoForm[] = ["nascimento", "dataPublicacao", "dataColacao", "dataExpedicao", "registroData"];
+
+function campoPreenchido(k: CampoForm, form: typeof formVazio): boolean {
+  const v = String(form[k] ?? "").trim();
+  if (!v) return false;
+  if (TAMANHO_DATA.includes(k)) return v.length === 10;
+  if (k === "cpf") return v.replace(/\D/g, "").length === 11;
+  if (k === "cep") return v.replace(/\D/g, "").length === 8;
+  if (k === "orgaoExpedidor") return !orgaoIncompleto(v);
+  if (k === "instituicao") return !instituicaoSemLugar(v);
+  return true;
+}
+
+function analisarProgresso(form: typeof formVazio, estacio: boolean): { progresso: number; faltando: string[] } {
+  const campos = estacio ? CAMPOS_PROGRESSO_ESTACIO : CAMPOS_PROGRESSO_PUBLICACAO;
+  const faltando = campos.filter(([k]) => !campoPreenchido(k, form)).map(([, rotulo]) => rotulo);
+  return { progresso: Math.round(((campos.length - faltando.length) / campos.length) * 100), faltando };
+}
+
 function formDeCliente(c: Cliente): typeof formVazio {
   return {
     nome: c.nome, nascimento: c.nascimento, cpf: c.cpf, rg: c.rg,
@@ -1952,24 +1988,47 @@ function formDeCliente(c: Cliente): typeof formVazio {
   };
 }
 
-function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
+type RascunhoLocal = { form?: typeof formVazio; senhaAcesso?: string; editandoId?: string; emec?: DadosEmec; emecManual?: string[]; rascunhoId?: string };
+
+function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, autor, onRascunhoConcluido, editarPubId, onVerHistorico }: {
   clientes: Cliente[];
   onGerar: (c: Cliente) => void;
   onEditar: (c: Cliente) => Promise<boolean>;
   prefill?: { nome?: string; cpf?: string } | null;
   grupo?: string;
+  rascunhoDb?: Rascunho | null;
+  autor?: string;
+  onRascunhoConcluido?: () => void;
+  editarPubId?: string;
+  onVerHistorico?: (pubId: string) => void;
 }) {
+  const navigate = useNavigate();
   const isEstacio = grupo === "estacio";
   const vazio = isEstacio ? formVazioEstacio : formVazio;
   const rascunhoKey = `pub-rascunho-${grupo ?? "publicacao"}`;
-  const rascunhoInicial = useRef<{ form?: typeof formVazio; senhaAcesso?: string; editandoId?: string; emec?: DadosEmec; emecManual?: string[] } | null | undefined>(undefined);
+  const rascunhoInicial = useRef<RascunhoLocal | null | undefined>(undefined);
   if (rascunhoInicial.current === undefined) {
+    let local: RascunhoLocal | null = null;
     try {
       const raw = sessionStorage.getItem(rascunhoKey);
-      rascunhoInicial.current = raw ? JSON.parse(raw) : null;
-    } catch { rascunhoInicial.current = null; }
+      local = raw ? JSON.parse(raw) : null;
+    } catch { local = null; }
+    // Rascunho salvo no banco vence, a não ser que esta mesma sessão já o esteja editando.
+    if (rascunhoDb && local?.rascunhoId !== rascunhoDb.id) {
+      const d = rascunhoDb.dados;
+      local = {
+        form: d.form as typeof formVazio, emec: d.emec as DadosEmec | undefined,
+        emecManual: d.emecManual, editandoId: d.editandoId, rascunhoId: rascunhoDb.id,
+      };
+    }
+    rascunhoInicial.current = local;
   }
   const rascunho = rascunhoInicial.current;
+  const [rascunhoId, setRascunhoId] = useState(rascunho?.rascunhoId ?? "");
+  const [rascunhoSalvoEm, setRascunhoSalvoEm] = useState(
+    rascunhoDb && rascunhoDb.id === rascunho?.rascunhoId ? rascunhoDb.updated_at : "");
+  const [salvandoRascunho, setSalvandoRascunho] = useState(false);
+  const saindo = useRef(false);
   const [form, setForm] = useState(() => rascunho?.form
     ? { ...vazio, ...rascunho.form }
     : { ...vazio, nome: prefill?.nome ?? "", cpf: prefill?.cpf ? maskCPF(prefill.cpf) : "" });
@@ -2003,15 +2062,55 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   }, [clientes, rascunho]);
 
   useEffect(() => {
+    if (saindo.current) return;
     if (gerado) {
       sessionStorage.removeItem(rascunhoKey);
       return;
     }
     sessionStorage.setItem(rascunhoKey, JSON.stringify({
       form, senhaAcesso, editandoId: editando?.pubId ?? "",
-      emec, emecManual: [...emecManual],
+      emec, emecManual: [...emecManual], rascunhoId,
     }));
-  }, [form, senhaAcesso, editando, gerado, rascunhoKey, emec, emecManual]);
+  }, [form, senhaAcesso, editando, gerado, rascunhoKey, emec, emecManual, rascunhoId]);
+
+  // Publicação concluída: o rascunho de origem deixa de existir.
+  useEffect(() => {
+    if (!gerado || !rascunhoId) return;
+    void apagarRascunho(rascunhoId);
+    setRascunhoId("");
+    setRascunhoSalvoEm("");
+    onRascunhoConcluido?.();
+  }, [gerado, rascunhoId, onRascunhoConcluido]);
+
+  async function concluirMaisTarde() {
+    if (!form.nome.trim() && !form.cpf.trim()) {
+      setErro("Informe ao menos o nome ou o CPF do aluno para salvar o rascunho.");
+      return;
+    }
+    setErro("");
+    setSalvandoRascunho(true);
+    const { progresso, faltando } = analisarProgresso(form, isEstacio);
+    try {
+      await salvarRascunho({
+        grupo: grupo ?? "publicacao",
+        nome: form.nome.trim(),
+        cpf: form.cpf.trim(),
+        curso: form.curso.trim(),
+        dados: { form, emec, emecManual: [...emecManual], editandoId: editando?.pubId ?? "" },
+        progresso, faltando,
+        edicao: !!editando,
+        autor_nome: autor ?? "",
+      }, rascunhoId || undefined);
+    } catch (e) {
+      console.error("[rascunho]", e);
+      setSalvandoRascunho(false);
+      setErro("Não foi possível salvar o rascunho. Verifique a conexão (e se a migração 017_rascunhos.sql foi aplicada).");
+      return;
+    }
+    saindo.current = true;
+    sessionStorage.removeItem(rascunhoKey);
+    navigate("/clientes", { state: { rascunhoSalvo: form.nome.trim() || form.cpf.trim() } });
+  }
 
   useEffect(() => {
     if (!isEstacio) return;
@@ -2068,6 +2167,17 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
     setSenhaAcesso("");
     sessionStorage.removeItem(rascunhoKey);
   }
+
+  // Vindo da aba HISTÓRICO ("Editar na aba NOVO"): abre o registro já carregado no formulário.
+  const editarAplicado = useRef("");
+  useEffect(() => {
+    if (!editarPubId || editarAplicado.current === editarPubId) return;
+    const c = clientes.find(x => x.pubId === editarPubId);
+    if (!c) return;
+    editarAplicado.current = editarPubId;
+    if (rascunho?.editandoId === editarPubId) return;
+    selecionarEdicao(editarPubId);
+  }, [editarPubId, clientes]);
 
   function confirmarCamposDiploma(): boolean {
     if (!isEstacio) return true;
@@ -2345,6 +2455,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
         <div className="pub-done-actions">
           <button className="btn-sm" onClick={() => window.open(gerado.url, "_blank")}>Ver página</button>
+          {onVerHistorico && <button className="btn-sm" onClick={() => onVerHistorico(gerado.pubId)}>Ver histórico</button>}
           <button className="btn-primary" onClick={novaPublicacao}>+ Nova publicação</button>
         </div>
       </div>
@@ -2354,6 +2465,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
   return (
     <form className="tab-body" onSubmit={gerar}>
       <div className="edit-sections">
+        {rascunhoId && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", fontSize: 13, color: "var(--fg)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>
+              <strong>Retomando um rascunho.</strong>{" "}
+              {rascunhoSalvoEm && <span style={{ color: "var(--fg-muted)" }}>Salvo em {new Date(rascunhoSalvoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. </span>}
+              <span style={{ color: "var(--fg-muted)" }}>Ao gerar a publicação, ele sai de Andamento.</span>
+            </span>
+          </div>
+        )}
         {isEstacio && (
           <div className="edit-section">
             <div className="edit-section-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2380,7 +2503,12 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
 
         {clientes.length > 0 && (
           <div className="edit-section">
-            <div className="edit-section-title">Editar publicação existente</div>
+            <div className="edit-section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span>Editar publicação existente</span>
+              {editando && onVerHistorico && (
+                <button type="button" className="btn-sm" onClick={() => onVerHistorico(editando.pubId)}>Ver histórico deste registro</button>
+              )}
+            </div>
             <div className="edit-grid">
               <div className="field-group field-group--full">
                 <label className="edit-label">Selecione uma publicação para editar ou deixe em branco para criar uma nova</label>
@@ -2486,6 +2614,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo }: {
           <button type="button" className="btn-sm" onClick={editando ? cancelarEdicao : () => { setForm(vazio); setSenhaAcesso(""); setEmec(emecVazio()); setEmecManual(new Set()); sessionStorage.removeItem(rascunhoKey); }}>
             {editando ? "Cancelar edição" : "Limpar"}
           </button>
+          <button type="button" className="btn-sm" onClick={concluirMaisTarde} disabled={salvando || salvandoRascunho}
+            title="Salva o que já foi preenchido e deixa em Andamento para terminar depois"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, borderColor: "rgba(245,158,11,0.45)", color: "#f59e0b" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            {salvandoRascunho ? "Salvando…" : "Concluir mais tarde"}
+          </button>
           <button type="submit" className="btn-primary" disabled={salvando || (isEstacio && templateStatus !== "ok")}>
             {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Gerar Publicação"}
           </button>
@@ -2564,8 +2700,8 @@ function FieldDate({ label, value, onChange, full }: { label: string; value: str
   );
 }
 
-/* ── Tab HISTÓRICO ── */
-function TabHistorico({ clientes }: { clientes: Cliente[] }) {
+/* ── Tab PUBLICADOS (lista simples das publicações no ar) ── */
+function TabPublicados({ clientes }: { clientes: Cliente[] }) {
   const publicados = clientes.filter(c => c.status === "Publicado");
   return (
     <div className="tab-body">
@@ -2675,15 +2811,34 @@ export default function Publicacao() {
   const grupo = grupoParam ?? "publicacao";
   const labels = GRUPO_LABELS[grupo] ?? GRUPO_LABELS["publicacao"];
   const tabs = grupo === "estacio"
-    ? [TABS_BASE[0], TABS_BASE[1], { id: "acesso" as const, label: "ACESSO" }, ...TABS_BASE.slice(2)]
+    ? [TABS_BASE[0], TABS_BASE[1], TABS_BASE[2], { id: "acesso" as const, label: "ACESSO" }, ...TABS_BASE.slice(3)]
     : TABS_BASE;
   const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
   const isAdmin = usuario?.perfil === "Administrador";
-  const prefill = (location.state as { nome?: string; cpf?: string } | null) ?? null;
+  const estadoNav = (location.state as { nome?: string; cpf?: string; rascunhoId?: string } | null) ?? null;
+  const prefill = estadoNav && (estadoNav.nome !== undefined || estadoNav.cpf !== undefined) ? estadoNav : null;
+  const rascunhoIdNav = estadoNav?.rascunhoId ?? "";
+  const [rascunhoDb, setRascunhoDb] = useState<Rascunho | null>(null);
+  const [rascunhoCarregando, setRascunhoCarregando] = useState(!!rascunhoIdNav);
   const [searchParams, setSearchParams] = useSearchParams();
   const abaUrl = searchParams.get("aba");
   const activeTab: Tab = tabs.some(t => t.id === abaUrl) ? (abaUrl as Tab) : (prefill ? "novo" : "clientes");
   const setActiveTab = (t: Tab) => setSearchParams({ aba: t });
+  const pubHistorico = searchParams.get("pub") ?? "";
+  const pubEditarUrl = searchParams.get("editar") ?? "";
+  const abrirHistorico = (pubId: string) => setSearchParams(pubId ? { aba: "historico", pub: pubId } : { aba: "historico" });
+  const editarDoHistorico = (pubId: string) => {
+    const rascunhoKey = `pub-rascunho-${grupo}`;
+    try {
+      const local = JSON.parse(sessionStorage.getItem(rascunhoKey) ?? "null") as
+        { form?: { nome?: string; cpf?: string }; editandoId?: string } | null;
+      const temFormulario = !!(local?.form?.nome?.trim() || local?.form?.cpf?.trim());
+      if (temFormulario && local?.editandoId !== pubId &&
+        !window.confirm("Há um formulário em preenchimento na aba NOVO. Abrir este registro vai substituí-lo. Continuar?")) return;
+      if (temFormulario && local?.editandoId !== pubId) sessionStorage.removeItem(rascunhoKey);
+    } catch { /* sem formulário local */ }
+    setSearchParams({ aba: "novo", editar: pubId });
+  };
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
 
@@ -2707,6 +2862,18 @@ export default function Publicacao() {
       })();
     }
   }, [grupo]);
+
+  useEffect(() => {
+    setRascunhoDb(null);
+    if (!rascunhoIdNav) { setRascunhoCarregando(false); return; }
+    let cancelado = false;
+    setRascunhoCarregando(true);
+    carregarRascunho(rascunhoIdNav)
+      .then(r => { if (!cancelado) setRascunhoDb(r && r.grupo === grupo ? r : null); })
+      .catch(() => {})
+      .finally(() => { if (!cancelado) setRascunhoCarregando(false); });
+    return () => { cancelado = true; };
+  }, [rascunhoIdNav, grupo]);
 
   async function adicionarCliente(c: Cliente) {
     const { data: { user } } = await supabase.auth.getUser();
@@ -2793,7 +2960,7 @@ export default function Publicacao() {
           ))}
         </div>
         <div className="pub-tab-content">
-          {dbLoading ? (
+          {dbLoading || rascunhoCarregando ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 0", color: "var(--fg-muted)", gap: 10 }}>
               <span style={{ display: "inline-block", width: 18, height: 18, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
               Carregando...
@@ -2801,8 +2968,21 @@ export default function Publicacao() {
           ) : (
             <>
               {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
-              {activeTab === "novo"       && <TabNovo clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} />}
-              {activeTab === "historico"  && <TabHistorico clientes={clientes} />}
+              {activeTab === "novo"       && <TabNovo key={grupo} clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} rascunhoDb={rascunhoDb} autor={usuario?.nome} onRascunhoConcluido={() => setRascunhoDb(null)} editarPubId={pubEditarUrl} onVerHistorico={abrirHistorico} />}
+              {activeTab === "historico"  && (
+                <HistoricoRegistros
+                  grupo={grupo}
+                  registros={clientes.map(c => ({
+                    pubId: c.pubId, nome: c.nome, cpf: c.cpf, curso: c.curso, protocolo: c.protocolo, ativo: c.ativo,
+                    modalidade: c.modalidade, nacionalidade: c.nacionalidade, rg: c.rg, orgaoExpedidor: c.orgaoExpedidor,
+                    naturalidade: c.naturalidade, reitor: c.reitor,
+                  }))}
+                  selecionado={pubHistorico}
+                  onSelecionar={abrirHistorico}
+                  onEditar={editarDoHistorico}
+                />
+              )}
+              {activeTab === "publicados" && <TabPublicados clientes={clientes} />}
               {activeTab === "visualizar" && <TabVisualizar clientes={clientes} />}
               {activeTab === "acesso" && <TabAcesso clientes={clientes} />}
             </>

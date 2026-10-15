@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import "../components/Layout.css";
 import { supabase } from "../lib/supabase";
 import { sincronizarPublicacoes } from "../lib/controle";
+import { contarRascunhos } from "../lib/rascunhos";
 import type { UsuarioLogado } from "../lib/usuario";
 
 function fmtData(iso: string) {
@@ -50,19 +51,20 @@ function Ring({ pct, color, size = 72 }: { pct: number; color: string; size?: nu
 }
 
 const CARDS = [
-  { key: "clientes",  label: "Clientes",       color: "#818cf8", bg: "rgba(99,102,241,0.13)",  route: "/clientes",  icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-  { key: "qrcodes",   label: "QR Publicados",  color: "#34d399", bg: "rgba(52,211,153,0.13)",  route: "/qrcodes",   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg> },
-  { key: "pendentes", label: "Pendentes",      color: "#fbbf24", bg: "rgba(251,191,36,0.13)",  route: "/pendentes", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-  { key: "usuarios",  label: "Usuários Ativos",color: "#0ea5e9", bg: "rgba(14,165,233,0.13)", route: "/usuarios",  icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+  { key: "alunos",    label: "Alunos",          color: "#818cf8", bg: "rgba(99,102,241,0.13)",  route: "/qrcodes",   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+  { key: "qrcodes",   label: "QR Publicados",   color: "#34d399", bg: "rgba(52,211,153,0.13)",  route: "/qrcodes",   icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg> },
+  { key: "pendentes", label: "Em andamento",    color: "#fbbf24", bg: "rgba(251,191,36,0.13)",  route: "/clientes", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+  { key: "usuarios",  label: "Usuários Ativos", color: "#0ea5e9", bg: "rgba(14,165,233,0.13)", route: "/usuarios",  icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
 ];
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading,    setLoading]    = useState(true);
-  const [clientes,   setClientes]   = useState<number | null>(null);
+  const [alunos,     setAlunos]     = useState<number | null>(null);
   const [qrcodes,    setQrcodes]    = useState<number | null>(null);
   const [pendentes,  setPendentes]  = useState<number | null>(null);
   const [concluidos, setConcluidos] = useState<number | null>(null);
+  const [rascunhos,  setRascunhos]  = useState<number>(0);
   const [usuarios,   setUsuarios]   = useState<number | null>(null);
   const [recentes,   setRecentes]   = useState<Recente[]>([]);
   const { usuario } = useOutletContext<{ usuario: UsuarioLogado | null }>();
@@ -74,21 +76,24 @@ export default function Dashboard() {
       if (!silent) setLoading(true);
       try { await sincronizarPublicacoes(); } catch { /* contagens seguem com o que existe */ }
       const [
-        { count: tCli },
+        { count: tAlunos },
         { count: tQR },
         { count: tPend },
         { count: tConc },
         { count: tUsu },
         { data: rec },
+        tRasc,
       ] = await Promise.all([
-        supabase.from("clientes").select("*", { count: "exact", head: true }),
+        supabase.from("publicacoes").select("*", { count: "exact", head: true }),
         supabase.from("publicacoes").select("*", { count: "exact", head: true }),
         supabase.from("clientes").select("*", { count: "exact", head: true }).eq("controle_status", "Pendente"),
         supabase.from("clientes").select("*", { count: "exact", head: true }).eq("controle_status", "Concluído"),
         supabase.from("usuarios").select("*", { count: "exact", head: true }).eq("status", "Ativo"),
         supabase.from("clientes").select("id,nome,cpf,controle_status,created_at").order("created_at", { ascending: false }).limit(6),
+        contarRascunhos(),
       ]);
-      setClientes(tCli ?? 0);
+      setRascunhos(tRasc);
+      setAlunos(tAlunos ?? 0);
       setQrcodes(tQR ?? 0);
       setPendentes(tPend ?? 0);
       setConcluidos(tConc ?? 0);
@@ -97,12 +102,23 @@ export default function Dashboard() {
       setLoading(false);
     }
     load();
+
+    // Atualiza contadores em tempo real quando clientes ou publicações mudam
+    const canal = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "clientes" },     () => load(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "publicacoes" }, () => load(true))
+      .subscribe();
+
     const aoVoltar = () => { if (!document.hidden) load(true); };
     document.addEventListener("visibilitychange", aoVoltar);
-    return () => document.removeEventListener("visibilitychange", aoVoltar);
+    return () => {
+      supabase.removeChannel(canal);
+      document.removeEventListener("visibilitychange", aoVoltar);
+    };
   }, []);
 
-  const vals: Record<string, number | null> = { clientes, qrcodes, pendentes, usuarios };
+  const vals: Record<string, number | null> = { alunos, qrcodes, pendentes: (pendentes ?? 0) + rascunhos, usuarios };
   const total   = (pendentes ?? 0) + (concluidos ?? 0);
   const pctConc = total > 0 ? Math.round(((concluidos ?? 0) / total) * 100) : 0;
 

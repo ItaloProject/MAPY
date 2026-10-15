@@ -108,3 +108,41 @@
   .ctl-modal-box input { font-size: 16px !important; min-height: 46px; }
   .ctl-modal-box button { min-height: 44px; }
 }
+
+/* ── Andamento: rascunhos salvos ("Concluir mais tarde") ── */
+.ctl-section-title {
+  display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px;
+  font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-muted);
+}
+.ctl-section-title--sep { border-top: 1px solid var(--border); margin-top: 4px; }
+.ctl-section-count { font-size: 11px; background: var(--surface-2); padding: 1px 8px; border-radius: 20px; letter-spacing: 0; }
+.ctl-drafts { display: flex; flex-direction: column; }
+.ctl-draft {
+  display: grid; grid-template-columns: minmax(200px, 1.1fr) minmax(220px, 1.4fr) auto; align-items: center; gap: 20px;
+  padding: 14px 16px; border-top: 1px solid var(--border); transition: background .12s;
+}
+.ctl-draft:hover { background: var(--surface-2); }
+.ctl-draft-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ctl-draft-id { min-width: 0; }
+.ctl-draft-nome { font-weight: 700; font-size: 14px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-draft-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; }
+.ctl-draft-curso { font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.ctl-tag { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.ctl-tag--publicacao { background: rgba(99,102,241,.14); color: #818cf8; }
+.ctl-tag--estacio { background: rgba(16,185,129,.14); color: #34d399; }
+.ctl-tag--edicao { background: rgba(245,158,11,.14); color: #f59e0b; }
+.ctl-draft-progress { min-width: 0; }
+.ctl-progress-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+.ctl-draft-when { font-weight: 500; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctl-progress { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.ctl-progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f59e0b, #10b981); transition: width .6s cubic-bezier(.4,0,.2,1); }
+.ctl-draft-falta { margin-top: 6px; font-size: 11px; color: var(--fg-muted); line-height: 1.4; }
+
+@media (max-width: 860px) {
+  .ctl-draft { grid-template-columns: 1fr; gap: 12px; margin: 0 12px 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .ctl-draft:hover { background: var(--surface); }
+  .ctl-draft .ctl-actions { justify-content: stretch; }
+  .ctl-draft .ctl-btn--fazer { flex: 1; min-height: 44px; font-size: 14px; border-radius: 10px; }
+  .ctl-draft .ctl-btn--del { min-height: 44px; width: 50px; border-radius: 10px; }
+  .ctl-drafts .ctl-section-title { padding-left: 16px; }
+}

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import "../components/Layout.css";
 import "./Clientes.css";
 import { supabase } from "../lib/supabase";
-import { sincronizarPublicacoes } from "../lib/controle";
+import { sincronizarPublicacoes, mesmaPessoa } from "../lib/controle";
+import { listarRascunhos, apagarRascunho, type Rascunho } from "../lib/rascunhos";
 
 type ControleStatus = "Pendente" | "Concluído";
 
@@ -31,9 +32,20 @@ function diasDesde(iso: string) {
   return `há ${dias} dias`;
 }
 function iniciais(nome: string) {
-  const p = nome.trim().split(" ");
-  return (p[0][0] + (p[p.length - 1][0] ?? "")).toUpperCase();
+  const p = nome.trim().split(" ").filter(Boolean);
+  if (!p.length) return "?";
+  return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
 }
+function tempoDesde(iso: string) {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "agora há pouco";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "há 1 dia" : `há ${d} dias`;
+}
+const GRUPO_ROTULO: Record<string, string> = { publicacao: "Publicação", estacio: "Estácio" };
 
 const AVATAR_COLORS = ["#0ea5e9","#06b6d4","#10b981","#f59e0b","#f43f5e","#3b82f6","#8b5cf6"];
 function avatarColor(nome: string) {
@@ -55,19 +67,54 @@ export default function Controle() {
   const [search,    setSearch]    = useState("");
   const [ordem,     setOrdem]     = useState<"desc" | "asc">("desc");
   const [publicados, setPublicados] = useState<Set<string>>(new Set());
+  const [rascunhos, setRascunhos] = useState<Rascunho[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => { carregar(); }, [ordem]);
+
+  useEffect(() => {
+    const salvo = (location.state as { rascunhoSalvo?: string } | null)?.rascunhoSalvo;
+    if (!salvo) return;
+    showToast(`Rascunho de ${salvo} salvo em Andamento.`);
+    setAba("Pendente");
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state]);
 
   async function carregar() {
     setLoading(true);
     try { setPublicados(await sincronizarPublicacoes()); } catch {}
-    const { data } = await supabase
-      .from("clientes")
-      .select("id,nome,cpf,controle_status,created_at")
-      .order("created_at", { ascending: ordem === "asc" });
+    const [{ data }, rasc] = await Promise.all([
+      supabase.from("clientes").select("id,nome,cpf,controle_status,created_at").order("created_at", { ascending: ordem === "asc" }),
+      listarRascunhos(),
+    ]);
     setRegistros((data ?? []) as Registro[]);
+    setRascunhos(rasc);
     setLoading(false);
+  }
+
+  function continuarRascunho(r: Rascunho) {
+    try {
+      const raw = sessionStorage.getItem(`pub-rascunho-${r.grupo}`);
+      const atual = raw ? JSON.parse(raw) as { form?: { nome?: string; cpf?: string }; rascunhoId?: string } : null;
+      const emAndamento = !!(atual?.form?.nome?.trim() || atual?.form?.cpf?.trim());
+      if (emAndamento && atual?.rascunhoId !== r.id) {
+        const quem = atual?.form?.nome?.trim() || atual?.form?.cpf?.trim();
+        if (!window.confirm(`Há um formulário em preenchimento (${quem}) que ainda não foi salvo.
+
+Abrir este rascunho vai substituí-lo. Continuar?`)) return;
+      }
+    } catch { /* sem formulário local */ }
+    navigate(`/qrcodes/${r.grupo}?aba=novo`, { state: { rascunhoId: r.id } });
+  }
+
+  async function descartarRascunho(r: Rascunho) {
+    const quem = r.nome || r.cpf || "este rascunho";
+    if (!window.confirm(`Descartar o rascunho de ${quem}?\n\nO que foi preenchido será perdido.`)) return;
+    if (await apagarRascunho(r.id)) {
+      setRascunhos(prev => prev.filter(x => x.id !== r.id));
+      showToast("Rascunho descartado.");
+    } else showToast("Não foi possível descartar o rascunho.");
   }
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000); }
@@ -142,16 +189,25 @@ export default function Controle() {
   // CPFs e nomes já concluídos para deduplicar pendentes
   const cpfsConc  = new Set(concluidos.map(r => r.cpf?.replace(/\D/g, "")).filter((v): v is string => !!v && v.length === 11));
   const nomesConc = new Set(concluidos.map(r => r.nome.trim().replace(/\s+/g, " ").toUpperCase()));
-  const pendentes = registros.filter(r => {
+  // Quem já tem rascunho aparece só como rascunho; "aguardando" são os pendentes sem nada iniciado.
+  const aguardando = registros.filter(r => {
     if (publicados.has(r.id)) return false;
     const cpf = r.cpf?.replace(/\D/g, "") ?? "";
     if (cpf.length === 11 && cpfsConc.has(cpf)) return false;
     if (nomesConc.has(r.nome.trim().replace(/\s+/g, " ").toUpperCase())) return false;
+    if (rascunhos.some(d => !d.edicao && mesmaPessoa(d, r))) return false;
     return true;
   });
 
-  const lista = (aba === "Pendente" ? pendentes : concluidos)
-    .filter(r => r.nome.toLowerCase().includes(search.toLowerCase()) || (r.cpf ?? "").includes(search));
+  const busca = search.trim().toLowerCase();
+  const buscaDigitos = busca.replace(/\D/g, "");
+  const casaBusca = (nome: string, cpf: string | null) =>
+    !busca || nome.toLowerCase().includes(busca) || (buscaDigitos.length > 0 && (cpf ?? "").replace(/\D/g, "").includes(buscaDigitos));
+
+  const rascunhosVisiveis = aba === "Pendente" ? rascunhos.filter(d => casaBusca(d.nome, d.cpf)) : [];
+  const totalAndamento = rascunhos.length + aguardando.length;
+
+  const lista = (aba === "Pendente" ? aguardando : concluidos).filter(r => casaBusca(r.nome, r.cpf));
 
   return (
     <>
@@ -222,9 +278,9 @@ export default function Controle() {
           <div className="ctl-robot"><RobotFull /></div>
           <div style={{ minWidth: 0 }}>
             <h1 className="page-title">Controle</h1>
-            <p className="page-sub">Gerencie clientes pendentes e concluídos</p>
+            <p className="page-sub">Acompanhe clientes em andamento e concluídos</p>
             <div className="ctl-pills">
-              <Pill label="Pendentes" count={pendentes.length} color="#f59e0b" />
+              <Pill label="Andamento" count={totalAndamento} color="#f59e0b" />
               <Pill label="Concluídos" count={concluidos.length} color="#34d399" />
             </div>
           </div>
@@ -243,8 +299,8 @@ export default function Controle() {
           {(["Pendente", "Concluído"] as ControleStatus[]).map(t => (
             <button key={t} onClick={() => { setAba(t); setSearch(""); }}
               className={`ctl-tab ${t === "Pendente" ? "ctl-tab--pend" : "ctl-tab--conc"}${aba === t ? " is-active" : ""}`}>
-              {t === "Pendente" ? "Pendentes" : "Concluídos"}
-              <span className="ctl-tab-count">{t === "Pendente" ? pendentes.length : concluidos.length}</span>
+              {t === "Pendente" ? "Andamento" : "Concluídos"}
+              <span className="ctl-tab-count">{t === "Pendente" ? totalAndamento : concluidos.length}</span>
             </button>
           ))}
         </div>
@@ -273,16 +329,70 @@ export default function Controle() {
             <div style={{ width: 26, height: 26, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin .7s linear infinite" }} />
             <p style={{ marginTop: 12 }}>Carregando…</p>
           </div>
-        ) : lista.length === 0 ? (
+        ) : lista.length === 0 && rascunhosVisiveis.length === 0 ? (
           <div className="empty-state" style={{ padding: "70px 0" }}>
             <div style={{ opacity: 0.3 }}><RobotFull /></div>
             <p style={{ marginTop: 16, fontSize: 14 }}>
-              {search ? "Nenhum resultado para a busca." : aba === "Pendente" ? "Nenhum cliente pendente." : "Nenhum cliente concluído ainda."}
+              {search ? "Nenhum resultado para a busca." : aba === "Pendente" ? "Nada em andamento. Use “Concluir mais tarde” na publicação para guardar um rascunho." : "Nenhum cliente concluído ainda."}
             </p>
           </div>
         ) : (
           <>
-            <table className="ctl-table">
+            {rascunhosVisiveis.length > 0 && (
+              <section className="ctl-drafts" aria-label="Rascunhos salvos">
+                <div className="ctl-section-title">
+                  Rascunhos salvos <span className="ctl-section-count">{rascunhosVisiveis.length}</span>
+                </div>
+                {rascunhosVisiveis.map(d => (
+                  <article key={d.id} className="ctl-draft">
+                    <div className="ctl-draft-who">
+                      <div className="c-avatar" style={{ background: avatarColor(d.nome || d.cpf || "?") }}>{iniciais(d.nome)}</div>
+                      <div className="ctl-draft-id">
+                        <div className="ctl-draft-nome">{d.nome || <span style={{ opacity: .5 }}>Sem nome</span>}</div>
+                        <div className="ctl-draft-meta">
+                          <span className={`ctl-tag ctl-tag--${d.grupo}`}>{GRUPO_ROTULO[d.grupo] ?? d.grupo}</span>
+                          {d.edicao && <span className="ctl-tag ctl-tag--edicao">Edição</span>}
+                          {d.cpf && <span className="c-cpf">{fmtCPF(d.cpf)}</span>}
+                          {d.curso && <span className="ctl-draft-curso">{d.curso}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ctl-draft-progress">
+                      <div className="ctl-progress-head">
+                        <span>{d.progresso}% preenchido</span>
+                        <span className="ctl-draft-when">salvo {tempoDesde(d.updated_at)}{d.autor_nome ? ` por ${d.autor_nome.split(" ")[0]}` : ""}</span>
+                      </div>
+                      <div className="ctl-progress" role="progressbar" aria-valuenow={d.progresso} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="ctl-progress-fill" style={{ width: `${d.progresso}%` }} />
+                      </div>
+                      {d.faltando.length > 0 && (
+                        <div className="ctl-draft-falta">
+                          Falta: {d.faltando.slice(0, 4).join(", ")}{d.faltando.length > 4 ? ` +${d.faltando.length - 4}` : ""}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="ctl-actions">
+                      <button className="ctl-btn ctl-btn--fazer" onClick={() => continuarRascunho(d)}>Continuar</button>
+                      <button className="ctl-btn ctl-btn--del" onClick={() => descartarRascunho(d)} title="Descartar rascunho" aria-label="Descartar rascunho">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </section>
+            )}
+
+            {lista.length > 0 && aba === "Pendente" && rascunhosVisiveis.length > 0 && (
+              <div className="ctl-section-title ctl-section-title--sep">
+                Aguardando início <span className="ctl-section-count">{lista.length}</span>
+              </div>
+            )}
+
+            {lista.length > 0 && <table className="ctl-table">
               <thead>
                 <tr>
                   <th>Cliente</th><th>CPF</th><th>Entrada</th><th>Tempo</th><th aria-label="Ações" />
@@ -339,8 +449,9 @@ export default function Controle() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table>}
             <div className="ctl-foot">
+              {rascunhosVisiveis.length > 0 && `${rascunhosVisiveis.length} rascunho${rascunhosVisiveis.length !== 1 ? "s" : ""} · `}
               {lista.length} registro{lista.length !== 1 ? "s" : ""}
             </div>
           </>

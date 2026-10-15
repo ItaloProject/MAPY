@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { carregarUsuarioLogado, type UsuarioLogado } from "./lib/usuario";
+import { limparRascunhosLocais } from "./lib/rascunhos";
 import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -37,7 +38,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthed(!!session);
       if (session?.user) carregarUsuario(session.user);
-      else setUsuario(null);
+      else { setUsuario(null); limparRascunhosLocais(); }
     });
 
     return () => subscription.unsubscribe();
@@ -45,6 +46,7 @@ export default function App() {
 
   async function logout() {
     await supabase.auth.signOut();
+    limparRascunhosLocais();
     setAuthed(false);
     setUsuario(null);
   }
