@@ -74,6 +74,7 @@ export default function App() {
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
         <Route path="/pub/:id" element={<PubViewer />} />
+        <Route path="/r/:id" element={<PubViewer />} />
         <Route path="*" element={<Navigate to={authed ? "/dashboard" : "/4c7913fce5eb"} replace />} />
       </Routes>
     </BrowserRouter>

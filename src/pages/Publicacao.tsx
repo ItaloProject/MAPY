@@ -5,6 +5,7 @@ import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
 import { carregarRascunho, salvarRascunho, apagarRascunho, type Rascunho } from "../lib/rascunhos";
+import { duplicarHistoricoEscolar } from "../lib/historicoEscolar";
 import HistoricoRegistros from "./HistoricoRegistros";
 import "../components/Layout.css";
 import "./Publicacao.css";
@@ -1988,11 +1989,12 @@ function formDeCliente(c: Cliente): typeof formVazio {
   };
 }
 
-type RascunhoLocal = { form?: typeof formVazio; senhaAcesso?: string; editandoId?: string; emec?: DadosEmec; emecManual?: string[]; rascunhoId?: string };
+type CopiaDe = { pubId: string; nome: string; cpf: string; curso: string };
+type RascunhoLocal = { form?: typeof formVazio; senhaAcesso?: string; editandoId?: string; emec?: DadosEmec; emecManual?: string[]; rascunhoId?: string; copiaDe?: CopiaDe | null };
 
-function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, autor, onRascunhoConcluido, editarPubId, onVerHistorico }: {
+function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, autor, onRascunhoConcluido, editarPubId, duplicarPubId, onVerHistorico }: {
   clientes: Cliente[];
-  onGerar: (c: Cliente) => void;
+  onGerar: (c: Cliente) => void | Promise<boolean>;
   onEditar: (c: Cliente) => Promise<boolean>;
   prefill?: { nome?: string; cpf?: string } | null;
   grupo?: string;
@@ -2000,6 +2002,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
   autor?: string;
   onRascunhoConcluido?: () => void;
   editarPubId?: string;
+  duplicarPubId?: string;
   onVerHistorico?: (pubId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -2043,6 +2046,8 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
   const [emec, setEmec] = useState<DadosEmec>(() => rascunho?.emec ? mesclarEmec(rascunho.emec) : emecVazio());
   const [emecManual, setEmecManual] = useState<Set<string>>(() => new Set(rascunho?.emecManual ?? []));
   const [acessoCriado, setAcessoCriado] = useState<{ matricula: string; senha: string } | null>(null);
+  const [copiaDe, setCopiaDe] = useState<CopiaDe | null>(rascunho?.copiaDe ?? null);
+  const [avisoCopia, setAvisoCopia] = useState("");
 
   useEffect(() => {
     if (!isEstacio) return;
@@ -2069,9 +2074,9 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     }
     sessionStorage.setItem(rascunhoKey, JSON.stringify({
       form, senhaAcesso, editandoId: editando?.pubId ?? "",
-      emec, emecManual: [...emecManual], rascunhoId,
+      emec, emecManual: [...emecManual], rascunhoId, copiaDe,
     }));
-  }, [form, senhaAcesso, editando, gerado, rascunhoKey, emec, emecManual, rascunhoId]);
+  }, [form, senhaAcesso, editando, gerado, rascunhoKey, emec, emecManual, rascunhoId, copiaDe]);
 
   // Publicação concluída: o rascunho de origem deixa de existir.
   useEffect(() => {
@@ -2144,6 +2149,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
   function selecionarEdicao(pubId: string) {
     const c = clientes.find(x => x.pubId === pubId) ?? null;
     setEditando(c);
+    setCopiaDe(null);
     setErro("");
     setForm(c ? formDeCliente(c) : vazio);
     if (c?.dadosEmec) {
@@ -2157,8 +2163,31 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     else { setMatricula(""); setSenhaAcesso(""); }
   }
 
+  // Cópia completa de um registro, aberta como processo novo: nada é gravado até gerar.
+  // Nº de registro e protocolo voltam ao valor de uma publicação nova; o resto segue igual para ser ajustado.
+  function duplicarRegistro(c: Cliente) {
+    setEditando(null);
+    setErro("");
+    setGerado(null);
+    setDocxBlob(null);
+    setAcessoCriado(null);
+    setAvisoCopia("");
+    setForm({ ...formDeCliente(c), protocolo: "", registroNumero: vazio.registroNumero });
+    if (c.dadosEmec) {
+      setEmec(c.dadosEmec);
+      setEmecManual(new Set(chavesEmec(c.dadosEmec)));
+    } else {
+      setEmec(emecVazio());
+      setEmecManual(new Set());
+    }
+    setMatricula("");
+    setSenhaAcesso("");
+    setCopiaDe({ pubId: c.pubId, nome: c.nome, cpf: c.cpf, curso: c.curso });
+  }
+
   function cancelarEdicao() {
     setEditando(null);
+    setCopiaDe(null);
     setErro("");
     setForm(vazio);
     setEmec(emecVazio());
@@ -2178,6 +2207,17 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     if (rascunho?.editandoId === editarPubId) return;
     selecionarEdicao(editarPubId);
   }, [editarPubId, clientes]);
+
+  // Vindo da aba HISTÓRICO ("Duplicar como novo"). Se este formulário já é a cópia, preserva o que foi digitado.
+  const duplicarAplicado = useRef("");
+  useEffect(() => {
+    if (!duplicarPubId || duplicarAplicado.current === duplicarPubId) return;
+    const c = clientes.find(x => x.pubId === duplicarPubId);
+    if (!c) return;
+    duplicarAplicado.current = duplicarPubId;
+    if (rascunho?.copiaDe?.pubId === duplicarPubId) return;
+    duplicarRegistro(c);
+  }, [duplicarPubId, clientes]);
 
   function confirmarCamposDiploma(): boolean {
     if (!isEstacio) return true;
@@ -2232,6 +2272,10 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
       setErro("Cidade/UF da Expedição precisa do traço e da UF, no formato Ribeirão Preto - SP.");
       return;
     }
+    if (copiaDe && !editando
+      && form.nome.trim().toUpperCase() === copiaDe.nome.trim().toUpperCase()
+      && form.cpf.replace(/\D/g, "") === copiaDe.cpf.replace(/\D/g, "")
+      && !window.confirm(`Nome e CPF ainda são os de ${copiaDe.nome}. Gerar mesmo assim?`)) return;
     if (!confirmarCamposDiploma()) return;
     setErro("");
     let credenciaisNovas: { matricula: string; senha: string } | null = null;
@@ -2289,9 +2333,10 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     }
 
     const pubId = await gerarPubId(grupo === "estacio");
+    const qrBase = (import.meta.env.VITE_QR_BASE_URL as string | undefined)?.replace(/\/$/, "") || window.location.origin;
     const url = grupo === "estacio"
       ? `${DIPLOMA_BASE}/${pubId}`
-      : `${window.location.origin}/pub/${pubId}`;
+      : `${qrBase}/r/${pubId}`;
 
     const dataDisplay = form.dataPublicacao || new Date().toLocaleDateString("pt-BR");
     const protocolo = Date.now().toString().slice(-13);
@@ -2328,12 +2373,35 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     if (isEstacio && !comDiploma) return;
 
     const novoFinal = comDiploma ?? novo;
-    onGerar(novoFinal);
+    const gravando = onGerar(novoFinal);
     if (isEstacio && credenciaisNovas) {
       const matriculaDiploma = matriculaDoDiploma(novoFinal);
       await vincularAcesso(novoFinal, { matricula: matriculaDiploma, senha: credenciaisNovas.senha });
     }
+    if (copiaDe) await copiarHistorico(copiaDe, novoFinal, gravando);
     setGerado(novoFinal);
+  }
+
+  async function copiarHistorico(origem: CopiaDe, novo: Cliente, gravando: void | Promise<boolean>) {
+    try {
+      if ((await gravando) === false) {
+        setAvisoCopia("A publicação não foi salva, então o histórico escolar não foi copiado.");
+        return;
+      }
+      const ficha = {
+        nome: novo.nome, curso: novo.curso, modalidade: novo.modalidade, nacionalidade: novo.nacionalidade,
+        rg: novo.rg, orgaoExpedidor: novo.orgaoExpedidor, naturalidade: novo.naturalidade, reitor: novo.reitor,
+      };
+      const copiou = await duplicarHistoricoEscolar(
+        origem.pubId, novo.pubId, grupo ?? "publicacao", ficha, novo.curso.trim() === origem.curso.trim(),
+      );
+      setAvisoCopia(copiou
+        ? `Histórico escolar copiado de ${origem.nome}. Revise na aba Histórico.`
+        : `${origem.nome} ainda não tem histórico escolar criado, então nada foi copiado.`);
+    } catch (e) {
+      console.error("[historico-escolar/duplicar]", e);
+      setAvisoCopia("Publicação gerada, mas não foi possível copiar o histórico escolar. Use \"Copiar tudo\" na aba Histórico.");
+    }
   }
 
   // Senha em branco = mantém o hash atual no banco (a senha antiga não é recuperável).
@@ -2357,6 +2425,8 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     setGerado(null);
     setDocxBlob(null);
     setEditando(null);
+    setCopiaDe(null);
+    setAvisoCopia("");
     setErro("");
     setMatricula("");
     setSenhaAcesso("");
@@ -2408,6 +2478,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
             {editando ? "Alterações salvas!" : "Publicação gerada!"}
           </div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{gerado.nome}</div>
+          {avisoCopia && <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>{avisoCopia}</div>}
           {acessoCriado && (
             <div style={{ marginTop: 12, textAlign: "left", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px" }}>
               <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 8 }}>
@@ -2465,6 +2536,18 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
   return (
     <form className="tab-body" onSubmit={gerar}>
       <div className="edit-sections">
+        {copiaDe && !editando && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(14,165,233,0.10)", border: "1px solid rgba(14,165,233,0.3)", fontSize: 13, color: "var(--fg)" }}>
+            <span style={{ flex: 1 }}>
+              <strong>Novo processo a partir de {copiaDe.nome}.</strong>{" "}
+              <span style={{ color: "var(--fg-muted)" }}>
+                Todos os dados foram copiados; se ele tiver histórico escolar, vai junto. Altere o que for diferente
+                (nome, CPF, RG, nascimento, filiação…) e gere. Nada foi salvo ainda.
+              </span>
+            </span>
+            <button type="button" className="btn-sm" onClick={cancelarEdicao}>Descartar cópia</button>
+          </div>
+        )}
         {rascunhoId && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", fontSize: 13, color: "var(--fg)" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2826,6 +2909,7 @@ export default function Publicacao() {
   const setActiveTab = (t: Tab) => setSearchParams({ aba: t });
   const pubHistorico = searchParams.get("pub") ?? "";
   const pubEditarUrl = searchParams.get("editar") ?? "";
+  const pubDuplicarUrl = searchParams.get("duplicar") ?? "";
   const abrirHistorico = (pubId: string) => setSearchParams(pubId ? { aba: "historico", pub: pubId } : { aba: "historico" });
   const editarDoHistorico = (pubId: string) => {
     const rascunhoKey = `pub-rascunho-${grupo}`;
@@ -2838,6 +2922,17 @@ export default function Publicacao() {
       if (temFormulario && local?.editandoId !== pubId) sessionStorage.removeItem(rascunhoKey);
     } catch { /* sem formulário local */ }
     setSearchParams({ aba: "novo", editar: pubId });
+  };
+  const duplicarDoHistorico = (pubId: string) => {
+    const rascunhoKey = `pub-rascunho-${grupo}`;
+    try {
+      const local = JSON.parse(sessionStorage.getItem(rascunhoKey) ?? "null") as
+        { form?: { nome?: string; cpf?: string } } | null;
+      const temFormulario = !!(local?.form?.nome?.trim() || local?.form?.cpf?.trim());
+      if (temFormulario && !window.confirm("Há um formulário em preenchimento na aba NOVO. Duplicar este registro vai substituí-lo. Continuar?")) return;
+      sessionStorage.removeItem(rascunhoKey);
+    } catch { /* sem formulário local */ }
+    setSearchParams({ aba: "novo", duplicar: pubId });
   };
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
@@ -2875,7 +2970,7 @@ export default function Publicacao() {
     return () => { cancelado = true; };
   }, [rascunhoIdNav, grupo]);
 
-  async function adicionarCliente(c: Cliente) {
+  async function adicionarCliente(c: Cliente): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     const row = { ...clienteToRow(c), grupo, created_by: user?.id ?? null };
     const { data } = await supabase
@@ -2883,10 +2978,10 @@ export default function Publicacao() {
       .insert([row])
       .select()
       .single();
-    if (data) {
-      setClientes(prev => [rowToCliente(data as DBRow), ...prev]);
-      if (c.nome.trim()) await marcarConcluido(c.nome, c.cpf || null);
-    }
+    if (!data) return false;
+    setClientes(prev => [rowToCliente(data as DBRow), ...prev]);
+    if (c.nome.trim()) await marcarConcluido(c.nome, c.cpf || null);
+    return true;
   }
 
   async function editarCliente(atualizado: Cliente): Promise<boolean> {
@@ -2968,7 +3063,7 @@ export default function Publicacao() {
           ) : (
             <>
               {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
-              {activeTab === "novo"       && <TabNovo key={grupo} clientes={clientes} onGerar={c => { adicionarCliente(c); }} onEditar={editarCliente} prefill={prefill} grupo={grupo} rascunhoDb={rascunhoDb} autor={usuario?.nome} onRascunhoConcluido={() => setRascunhoDb(null)} editarPubId={pubEditarUrl} onVerHistorico={abrirHistorico} />}
+              {activeTab === "novo"       && <TabNovo key={grupo} clientes={clientes} onGerar={adicionarCliente} onEditar={editarCliente} prefill={prefill} grupo={grupo} rascunhoDb={rascunhoDb} autor={usuario?.nome} onRascunhoConcluido={() => setRascunhoDb(null)} editarPubId={pubEditarUrl} duplicarPubId={pubDuplicarUrl} onVerHistorico={abrirHistorico} />}
               {activeTab === "historico"  && (
                 <HistoricoRegistros
                   grupo={grupo}
@@ -2980,6 +3075,7 @@ export default function Publicacao() {
                   selecionado={pubHistorico}
                   onSelecionar={abrirHistorico}
                   onEditar={editarDoHistorico}
+                  onDuplicar={duplicarDoHistorico}
                 />
               )}
               {activeTab === "publicados" && <TabPublicados clientes={clientes} />}

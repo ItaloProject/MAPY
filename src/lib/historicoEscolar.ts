@@ -200,6 +200,17 @@ export function completarDados(salvo: Partial<DadosHistoricoEscolar>, ficha: Fic
   });
 }
 
+// O que vale para a turma toda (modelo, curso, instituição, assinatura, disciplinas, fechamento).
+// Ficam de fora os dados de identificação, a data de emissão e o título do trabalho, que são de cada aluno.
+export function camposDoModelo(o: DadosHistoricoEscolar): Partial<DadosHistoricoEscolar> {
+  return {
+    modelo: o.modelo, titulo: o.titulo, assinante: o.assinante, grau: o.grau, curso: o.curso,
+    rg_2: o.rg_2, instituicao: o.instituicao, ano_total: o.ano_total,
+    nota_tcc: o.nota_tcc, orientador: o.orientador,
+    t1: o.t1.map(l => ({ ...l })), t2: o.t2.map(l => ({ ...l })),
+  };
+}
+
 export function somaCargaHoraria(dados: DadosHistoricoEscolar): number {
   return [...dados.t1, ...dados.t2].reduce((acc, d) => {
     const n = Number(String(d.cm).replace(/\D/g, ""));
@@ -258,6 +269,23 @@ export async function salvarHistoricoEscolar(
     .single();
   if (error) throw error;
   return data as HistoricoEscolarSalvo;
+}
+
+// Copia o histórico de um registro para outro (novo processo). Sem histórico na origem, não faz nada.
+export async function duplicarHistoricoEscolar(
+  origemPubId: string, destinoPubId: string, grupo: string, ficha: FichaAluno, mesmoCurso: boolean,
+): Promise<boolean> {
+  const origem = await carregarHistoricoEscolar(origemPubId);
+  if (!origem) return false;
+  const novo = dadosIniciais(ficha);
+  const copia = camposDoModelo(completarDados(origem.dados, ficha));
+  const dados = comCargaCalculada({
+    ...novo,
+    ...copia,
+    ...(mesmoCurso ? {} : { curso: novo.curso, grau: novo.grau }),
+  });
+  await salvarHistoricoEscolar(destinoPubId, grupo, dados);
+  return true;
 }
 
 export async function excluirHistoricoEscolar(pubId: string): Promise<void> {

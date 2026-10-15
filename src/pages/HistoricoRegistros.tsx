@@ -120,12 +120,13 @@ function Alteracoes({ itens }: { itens: Alteracao[] }) {
   );
 }
 
-export default function HistoricoRegistros({ grupo, registros, selecionado, onSelecionar, onEditar }: {
+export default function HistoricoRegistros({ grupo, registros, selecionado, onSelecionar, onEditar, onDuplicar }: {
   grupo: string;
   registros: RegistroResumo[];
   selecionado: string;
   onSelecionar: (pubId: string) => void;
   onEditar: (pubId: string) => void;
+  onDuplicar: (pubId: string) => void;
 }) {
   const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
   const [escolares, setEscolares] = useState<Map<string, string>>(new Map());
@@ -341,7 +342,13 @@ export default function HistoricoRegistros({ grupo, registros, selecionado, onSe
                 <div className="hist-cab-acoes">
                   {atual.excluido
                     ? <span className="hist-badge hist-badge--del">Registro excluído</span>
-                    : <button type="button" className="btn-sm" onClick={() => onEditar(atual.pubId)}>Editar na aba NOVO</button>}
+                    : <>
+                        <button type="button" className="btn-sm" onClick={() => onDuplicar(atual.pubId)}
+                          title="Abre na aba NOVO uma cópia completa deste registro (e do histórico escolar) como um novo processo">
+                          Duplicar como novo
+                        </button>
+                        <button type="button" className="btn-sm" onClick={() => onEditar(atual.pubId)}>Editar na aba NOVO</button>
+                      </>}
                 </div>
               </header>
 

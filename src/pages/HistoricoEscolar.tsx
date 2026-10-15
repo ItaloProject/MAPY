@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import FolhaHistorico from "./FolhaHistorico";
 import {
-  ASSINANTES, MODELOS_HISTORICO, assinanteDe, avisosDoHistorico, baixarBlob, carregarHistoricoEscolar, comCargaCalculada, completarDados, dadosIniciais, disciplinasDoModelo, excluirHistoricoEscolar, limparTituloTcc,
+  ASSINANTES, MODELOS_HISTORICO, assinanteDe, avisosDoHistorico, baixarBlob, camposDoModelo, carregarHistoricoEscolar, comCargaCalculada, completarDados, dadosIniciais, disciplinasDoModelo, excluirHistoricoEscolar, limparTituloTcc,
   gerarDocxHistorico, nomeArquivo, salvarHistoricoEscolar,
   type DadosHistoricoEscolar, type Disciplina, type FichaAluno,
 } from "../lib/historicoEscolar";
@@ -249,10 +249,13 @@ export default function HistoricoEscolar({ grupo, pubId, ficha, copiaveis, onSal
     }
   }
 
-  async function copiarDisciplinas() {
+  async function copiarDe(tudo: boolean) {
     const origem = copiaveis.find(c => c.pubId === origemCopia);
     if (!origem) return;
-    if (!window.confirm(`Substituir as disciplinas deste histórico pelas de ${origem.nome}? Os dados do aluno não mudam (até você salvar).`)) return;
+    const pergunta = tudo
+      ? `Copiar de ${origem.nome} o modelo, curso, instituição, assinatura, disciplinas e fechamento? Nome, RG, naturalidade, data e título do trabalho deste aluno não mudam (até você salvar).`
+      : `Substituir as disciplinas deste histórico pelas de ${origem.nome}? Os dados do aluno não mudam (até você salvar).`;
+    if (!window.confirm(pergunta)) return;
     setErroAcao("");
     try {
       const salvo = await carregarHistoricoEscolar(origem.pubId);
@@ -260,14 +263,19 @@ export default function HistoricoEscolar({ grupo, pubId, ficha, copiaveis, onSal
         setErroAcao("O histórico escolhido não foi encontrado.");
         return;
       }
-      const { t1, t2, ano_total } = salvo.dados;
-      alterar(d => ({
-        ...d,
-        t1: t1.map(l => ({ ...l })),
-        t2: t2.map(l => ({ ...l })),
-        ano_total,
-      }));
-      setAviso(`Disciplinas copiadas de ${origem.nome}.`);
+      if (tudo) {
+        const copia = camposDoModelo(completarDados(salvo.dados, fichaRef.current));
+        alterar(d => ({ ...d, ...copia }));
+      } else {
+        const { t1, t2, ano_total } = salvo.dados;
+        alterar(d => ({
+          ...d,
+          t1: t1.map(l => ({ ...l })),
+          t2: t2.map(l => ({ ...l })),
+          ano_total,
+        }));
+      }
+      setAviso(tudo ? `Histórico copiado de ${origem.nome}. Confira e salve.` : `Disciplinas copiadas de ${origem.nome}.`);
       setOrigemCopia("");
     } catch (e) {
       console.error("[historico-escolar/copia]", e);
@@ -506,10 +514,17 @@ export default function HistoricoEscolar({ grupo, pubId, ficha, copiaveis, onSal
                   <option value="">Copiar disciplinas de…</option>
                   {copiaveis.map(c => <option key={c.pubId} value={c.pubId}>{c.nome}</option>)}
                 </select>
-                <button type="button" className="btn-sm" disabled={!origemCopia} onClick={() => void copiarDisciplinas()}>
+                <button type="button" className="btn-sm" disabled={!origemCopia} onClick={() => void copiarDe(false)}>
                   Copiar disciplinas
                 </button>
+                <button type="button" className="btn-sm" disabled={!origemCopia} onClick={() => void copiarDe(true)}
+                  title="Copia modelo, curso, assinatura, disciplinas e fechamento; mantém os dados deste aluno">
+                  Copiar tudo
+                </button>
               </div>
+            )}
+            {copiaveis.length === 0 && (
+              <span className="he-campo-dica">Crie o histórico de um aluno para poder copiá-lo nos outros.</span>
             )}
           </section>
         </div>
