@@ -11,6 +11,7 @@ const TITULOS: Record<string, string> = {
   "/qrcodes/publicacao": "Publicação",
   "/qrcodes/estacio": "Estácio",
   "/pendentes": "Pendentes",
+  "/encurtador": "Encurtador",
   "/usuarios": "Usuários",
   "/configuracoes": "Configurações",
 };
@@ -32,6 +33,10 @@ const navBase = [
     to: "/pendentes", label: "Pendentes",
     icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
     pendente: true,
+  },
+  {
+    to: "/encurtador", label: "Encurtador",
+    icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
   },
   {
     to: "/usuarios", label: "Usuários",
@@ -56,7 +61,7 @@ export default function Layout({ onLogout, usuario }: { onLogout?: () => void; u
   const location  = useLocation();
   const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 768px)").matches);
   const mini = collapsed && !isMobile;
-  const maisAtivo = mobileOpen || ["/usuarios", "/configuracoes"].some(r => location.pathname.startsWith(r));
+  const maisAtivo = mobileOpen || ["/usuarios", "/encurtador", "/configuracoes"].some(r => location.pathname.startsWith(r));
   const titulo = TITULOS[location.pathname.replace(/\/+$/, "")] ?? "Painel de controle";
 
   useEffect(() => {

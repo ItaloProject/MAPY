@@ -13,6 +13,7 @@ import Publicacao from "./pages/Publicacao";
 import Pendentes from "./pages/Pendentes";
 import Usuarios from "./pages/Usuarios";
 import Configuracoes from "./pages/Configuracoes";
+import Encurtador from "./pages/Encurtador";
 import PubViewer from "./pages/PubViewer";
 
 export default function App() {
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="qrcodes/:grupo" element={<Publicacao />} />
           <Route path="pendentes" element={<Pendentes />} />
           <Route path="usuarios" element={usuario === null ? null : usuario.perfil === "Administrador" ? <Usuarios /> : <Navigate to="/dashboard" replace />} />
+          <Route path="encurtador" element={<Encurtador />} />
           <Route path="configuracoes" element={<Configuracoes />} />
         </Route>
         <Route path="/pub/:id" element={<PubViewer />} />
