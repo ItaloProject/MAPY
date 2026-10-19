@@ -3,7 +3,9 @@ import { useSearchParams } from "react-router-dom";
 import "../components/Layout.css";
 import "./Encurtador.css";
 import { supabase } from "../lib/supabase";
-import { SLUG_RE, criarLinkCurto, destinoValido, linkCurtoUrl as linkCurto } from "../lib/links";
+import {
+  BASES_DESTINO, SLUG_RE, criarLinkCurto, destinoValido, linkCurtoUrl as linkCurto, origemDe, trocarOrigem,
+} from "../lib/links";
 
 type Link = {
   slug: string;
@@ -44,6 +46,10 @@ export default function Encurtador() {
 
   const [copiado, setCopiado] = useState<string | null>(null);
 
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [aplicando, setAplicando] = useState(false);
+  const [msgLote, setMsgLote] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
+
   async function carregar() {
     setCarregando(true);
     const { data, error } = await supabase
@@ -66,6 +72,67 @@ export default function Encurtador() {
     if (!q) return links;
     return links.filter(l => l.slug.toLowerCase().includes(q) || l.target.toLowerCase().includes(q));
   }, [links, busca]);
+
+  // Quantos destinos estão em cada domínio (os que não são de nenhum dos dois entram em "outros")
+  const contagemBases = useMemo(() => {
+    const c: Record<string, number> = { outros: 0 };
+    for (const l of links) {
+      const o = origemDe(l.target);
+      if (BASES_DESTINO.includes(o)) c[o] = (c[o] ?? 0) + 1;
+      else c.outros++;
+    }
+    return c;
+  }, [links]);
+
+  const todosMarcados = filtrados.length > 0 && filtrados.every(l => sel.has(l.slug));
+
+  function alternar(slug: string) {
+    setSel(prev => {
+      const n = new Set(prev);
+      if (n.has(slug)) n.delete(slug); else n.add(slug);
+      return n;
+    });
+  }
+
+  function alternarTodos() {
+    setSel(todosMarcados ? new Set() : new Set(filtrados.map(l => l.slug)));
+  }
+
+  // Troca o domínio do destino dos links marcados. O link curto e o QR não mudam.
+  async function trocarDominio(base: string) {
+    setMsgLote(null);
+    const marcados = links.filter(l => sel.has(l.slug));
+    const planos = marcados.map(l => ({ l, novo: trocarOrigem(l.target, base) }));
+    const mudar = planos.filter(p => p.novo !== null && p.novo !== p.l.target);
+    const jaEstavam = planos.filter(p => p.novo !== null && p.novo === p.l.target).length;
+    const foraDosDois = planos.filter(p => p.novo === null).length;
+
+    if (mudar.length === 0) {
+      setMsgLote({ tipo: "err", texto: `Nada a alterar: ${jaEstavam} já estão em ${base}${foraDosDois ? ` e ${foraDosDois} têm destino em outro site` : ""}.` });
+      return;
+    }
+    if (!confirm(`Trocar o destino de ${mudar.length} link(s) para ${base}?\nOs links curtos e os QR codes não mudam.`)) return;
+
+    setAplicando(true);
+    const agora = new Date().toISOString();
+    let falhas = 0;
+    for (let i = 0; i < mudar.length; i += 8) {
+      const resultados = await Promise.all(
+        mudar.slice(i, i + 8).map(({ l, novo }) =>
+          supabase.from("links").update({ target: novo as string, updated_at: agora }).eq("slug", l.slug)),
+      );
+      falhas += resultados.filter(r => r.error).length;
+    }
+    setAplicando(false);
+    await carregar();
+    setSel(new Set());
+
+    const partes = [`${mudar.length - falhas} destino(s) alterado(s) para ${base}.`];
+    if (jaEstavam) partes.push(`${jaEstavam} já estavam nesse domínio.`);
+    if (foraDosDois) partes.push(`${foraDosDois} ignorado(s): destino em outro site.`);
+    if (falhas) partes.push(`${falhas} falharam — tente de novo.`);
+    setMsgLote({ tipo: falhas ? "err" : "ok", texto: partes.join(" ") });
+  }
 
   async function copiar(slug: string) {
     if (await copiarTexto(linkCurto(slug))) {
@@ -192,6 +259,26 @@ export default function Encurtador() {
 
         {erroLista && <div className="enc-msg enc-msg--err">{erroLista}</div>}
 
+        {links.length > 0 && (
+          <div className="enc-lote">
+            <div className="enc-lote-resumo">
+              {BASES_DESTINO.map(b => (
+                <span key={b} className="enc-chip">{b.replace("https://", "")}: <strong>{contagemBases[b] ?? 0}</strong></span>
+              ))}
+              {contagemBases.outros > 0 && <span className="enc-chip">outros: <strong>{contagemBases.outros}</strong></span>}
+            </div>
+            <div className="enc-lote-acao">
+              <span>{sel.size} selecionado(s). Trocar o domínio dos destinos para:</span>
+              {BASES_DESTINO.map(b => (
+                <button key={b} type="button" className="btn-sm" disabled={aplicando || sel.size === 0} onClick={() => trocarDominio(b)}>
+                  {aplicando ? "Aplicando..." : b.replace("https://", "")}
+                </button>
+              ))}
+            </div>
+            {msgLote && <div className={`enc-msg enc-msg--${msgLote.tipo}`}>{msgLote.texto}</div>}
+          </div>
+        )}
+
         {carregando ? (
           <div className="enc-vazio">Carregando...</div>
         ) : filtrados.length === 0 ? (
@@ -201,6 +288,9 @@ export default function Encurtador() {
             <table className="enc-tabela">
               <thead>
                 <tr>
+                  <th className="enc-col-sel">
+                    <input type="checkbox" checked={todosMarcados} onChange={alternarTodos} aria-label="Selecionar todos" />
+                  </th>
                   <th>Link curto</th>
                   <th>Destino</th>
                   <th>Cliques</th>
@@ -212,6 +302,9 @@ export default function Encurtador() {
                 {filtrados.map(l => (
                   <Fragment key={l.slug}>
                     <tr>
+                      <td className="enc-col-sel">
+                        <input type="checkbox" checked={sel.has(l.slug)} onChange={() => alternar(l.slug)} aria-label={`Selecionar ${l.slug}`} />
+                      </td>
                       <td>
                         <a className="enc-mono enc-link" href={linkCurto(l.slug)} target="_blank" rel="noreferrer">
                           /g/{l.slug}
@@ -230,7 +323,7 @@ export default function Encurtador() {
                     </tr>
                     {editando === l.slug && (
                       <tr className="enc-linha-edicao">
-                        <td colSpan={5}>
+                        <td colSpan={6}>
                           <div className="enc-edicao">
                             <input
                               type="url"

@@ -98,6 +98,19 @@
 .enc-edicao input { flex: 1 1 280px; }
 .enc-linha-edicao .enc-msg { margin-top: 10px; }
 
+/* Troca de domínio em lote */
+.enc-lote { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.enc-lote-resumo { display: flex; gap: 8px; flex-wrap: wrap; }
+.enc-chip {
+  padding: 4px 10px; border-radius: 20px; font-size: 12px; color: var(--fg-muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.enc-chip strong { color: var(--fg); }
+.enc-lote-acao { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--fg-muted); }
+.enc-lote .enc-msg { margin-top: 0; }
+.enc-col-sel { width: 36px; padding-right: 0 !important; }
+.enc-col-sel input { cursor: pointer; accent-color: var(--accent); }
+
 .enc-vazio { padding: 28px 20px; text-align: center; color: var(--fg-muted); font-size: 14px; }
 
 /* Celular: cada link vira um bloco empilhado */

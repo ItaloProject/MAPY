@@ -21,6 +21,27 @@ export function destinoValido(url: string): boolean {
   }
 }
 
+/** Os dois domínios usados nos destinos (/r/<id>) dos alunos; a troca em lote alterna entre eles. */
+export const BASES_DESTINO = ["https://emec.br.com", "https://e-meccom.vercel.app"];
+
+export function origemDe(url: string): string {
+  try { return new URL(url).origin; } catch { return ""; }
+}
+
+/**
+ * Troca só o domínio do destino por `base`, mantendo caminho, query e hash (/r/<id>).
+ * Devolve null se o domínio atual não for um de BASES_DESTINO (destinos de outros sites não são tocados).
+ */
+export function trocarOrigem(target: string, base: string): string | null {
+  try {
+    const u = new URL(target);
+    if (!BASES_DESTINO.includes(u.origin)) return null;
+    return new URL(u.pathname + u.search + u.hash, base).toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Domínio que vai DENTRO do QR. Defina VITE_SHORT_BASE_URL com o domínio mais estável
  * (ex.: https://e-meccom.vercel.app); sem ela, usa o domínio em que o sistema está aberto.
