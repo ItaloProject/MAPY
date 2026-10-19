@@ -11,19 +11,24 @@
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 
-.he-cab { position: relative; height: 242.75pt; }
+/* O cabeçalho flui: nome longo empurra o RG e a caixa para baixo, sem sobrepor (como no Word). */
+.he-cab { position: relative; padding-top: 90.4pt; }
+.he-linhas { display: flex; align-items: flex-start; min-height: 80.45pt; }
+.he-col1 { margin-left: 6.1pt; width: 149.15pt; padding-bottom: 21.5pt; }
+.he-col1 .he-nome { margin-top: 2.65pt; }
+.he-col1 .he-rg { margin-top: 3.2pt; }
+.he-col2 { margin-left: 22.6pt; width: 90.7pt; margin-top: 29.4pt; }
+.he-linhas .he-p { position: static; }
 .he-logo { position: absolute; left: 218.5pt; top: 0; width: 86.94pt; height: 68.98pt; display: block; }
 .he-assinatura { position: absolute; left: 349.6pt; top: 34.79pt; width: 149.25pt; height: 107.25pt; display: block; }
 
 .he-p { position: absolute; margin: 0; white-space: normal; overflow-wrap: anywhere; }
 .he-p--assinante { left: 349.2pt; top: 123pt; width: 152.1pt; white-space: nowrap; }
-.he-p--c1 { left: 6.1pt; width: 149.15pt; }
-.he-p--c2 { left: 177.85pt; width: 90.7pt; }
 .he-p--c3 { left: 349.55pt; width: 130pt; }
 .he-p--duas { line-height: 16.2pt; }
 
 .he-caixa {
-  position: absolute; left: 3.65pt; top: 170.85pt; width: 516.75pt; height: 65.8pt; box-sizing: border-box;
+  position: relative; margin-left: 3.65pt; margin-bottom: 6.1pt; width: 516.75pt; height: 65.8pt; box-sizing: border-box;
   border: 1.5pt solid #000;
 }
 .he-caixa-int { position: relative; left: -0.75pt; top: -0.75pt; }

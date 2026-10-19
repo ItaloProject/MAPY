@@ -71,6 +71,14 @@ export async function gerarPdfHistorico(dados: DadosHistoricoEscolar, recursos: 
   const logo = await doc.embedJpg(recursos.logo);
   const assinatura = recursos.assinatura ? await doc.embedPng(recursos.assinatura) : null;
 
+  // O modelo reserva 2 linhas para "Nome + Nacionalidade" e 3 para "Naturalidade + UF". Linhas a mais
+  // empurram o RG, a caixa e a tabela para baixo (como o fluxo do Word), em vez de se sobreporem.
+  const PASSO_CAB = 16.2;
+  const linhasNome = quebrar(`Nome: ${dados.nome} Nacionalidade: ${dados.nacionalidade}`, normal, 149.15);
+  const linhasNatur = quebrar(`Naturalidade: ${dados.naturalidade} UF: ${dados.uf}`, normal, 90.7);
+  const extraNome = Math.max(0, linhasNome.length - 2) * PASSO_CAB;
+  const extra = Math.max(extraNome, Math.max(0, linhasNatur.length - 3) * PASSO_CAB);
+
   function cabecalho(pg: PDFPage) {
     pg.drawImage(logo, { x: 253.9, y: y(36 + 68.98), width: 86.94, height: 68.98 });
     if (assinatura) pg.drawImage(assinatura, { x: 385.0, y: y(70.79 + 107.25), width: 149.25, height: 107.25 });
@@ -78,24 +86,22 @@ export async function gerarPdfHistorico(dados: DadosHistoricoEscolar, recursos: 
     const curso = [dados.grau, dados.curso].filter(s => s.trim()).join(" ");
     texto(pg, curso, 41.52, 134.42);
 
-    const nome = quebrar(`Nome: ${dados.nome} Nacionalidade: ${dados.nacionalidade}`, normal, 149.15);
-    nome.forEach((l, i) => texto(pg, l, 41.52, 150.74 + i * 16.2));
-    texto(pg, `RG: ${dados.rg}`, 41.52, 183.02);
+    linhasNome.forEach((l, i) => texto(pg, l, 41.52, 150.74 + i * PASSO_CAB));
+    texto(pg, `RG: ${dados.rg}`, 41.52, 183.02 + extraNome);
 
-    const natur = quebrar(`Naturalidade: ${dados.naturalidade} UF: ${dados.uf}`, normal, 90.7);
-    natur.forEach((l, i) => texto(pg, l, 213.29, 166.94 + i * 16.2));
+    linhasNatur.forEach((l, i) => texto(pg, l, 213.29, 166.94 + i * PASSO_CAB));
 
     texto(pg, dados.assinante, 385.03, 167.18);
     if (dados.rg_2.trim()) texto(pg, `RG: ${dados.rg_2}`, 385.03, 183.26);
 
     pg.drawRectangle({
-      x: 40.0, y: y(271.87), width: 515.25, height: 271.87 - 207.57,
+      x: 40.0, y: y(271.87 + extra), width: 515.25, height: 271.87 - 207.57,
       borderColor: preto, borderWidth: ESPESSURA,
     });
     const meio = largura(negrito, seguro(dados.titulo), 15);
-    texto(pg, dados.titulo, 297.625 - meio / 2, 228.98, negrito, 15);
-    texto(pg, `Instituição: ${dados.instituicao}`, 43.08, 245.18);
-    texto(pg, `Data: ${dados.data_emissao}`, 43.08, 261.41);
+    texto(pg, dados.titulo, 297.625 - meio / 2, 228.98 + extra, negrito, 15);
+    texto(pg, `Instituição: ${dados.instituicao}`, 43.08, 245.18 + extra);
+    texto(pg, `Data: ${dados.data_emissao}`, 43.08, 261.41 + extra);
   }
 
   function cabecalhoTabela(pg: PDFPage, topo: number) {
@@ -181,7 +187,7 @@ export async function gerarPdfHistorico(dados: DadosHistoricoEscolar, recursos: 
 
   const pagina1 = novaPagina();
   cabecalho(pagina1);
-  const fimT2 = tabela(todas, pagina1, 278.69);
+  const fimT2 = tabela(todas, pagina1, 278.69 + extra);
 
   type Token = { t: string; f: PDFFont };
   const esp = largura(normal, " ", TAMANHO);

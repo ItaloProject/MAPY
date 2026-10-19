@@ -47,17 +47,18 @@ export default function FolhaHistorico({ dados }: { dados: DadosHistoricoEscolar
         {assinatura && <img className="he-assinatura" src={assinatura.imagem} alt="" />}
         <p className="he-p he-p--assinante">{dados.assinante}</p>
 
-        <p className="he-p he-p--c1" style={{ top: "90.4pt" }}>{cursoLinha}</p>
-        <p className="he-p he-p--c1 he-p--duas" style={{ top: "103.4pt" }}>
-          Nome: {dados.nome} Nacionalidade: {dados.nacionalidade}
-        </p>
-        <p className="he-p he-p--c1" style={{ top: "139pt" }}>RG: {dados.rg}</p>
-
-        <p className="he-p he-p--c2 he-p--duas" style={{ top: "119.8pt" }}>
-          Naturalidade: {dados.naturalidade} UF: {dados.uf}
-        </p>
-
         {dados.rg_2.trim() && <p className="he-p he-p--c3" style={{ top: "139pt" }}>RG: {dados.rg_2}</p>}
+
+        <div className="he-linhas">
+          <div className="he-col1">
+            <p className="he-p">{cursoLinha}</p>
+            <p className="he-p he-p--duas he-nome">Nome: {dados.nome} Nacionalidade: {dados.nacionalidade}</p>
+            <p className="he-p he-rg">RG: {dados.rg}</p>
+          </div>
+          <div className="he-col2">
+            <p className="he-p he-p--duas">Naturalidade: {dados.naturalidade} UF: {dados.uf}</p>
+          </div>
+        </div>
 
         <div className="he-caixa">
           <div className="he-caixa-int">
