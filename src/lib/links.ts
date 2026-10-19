@@ -48,6 +48,12 @@ export async function criarLinkCurto(target: string, apelido = ""): Promise<stri
   throw new Error("Não consegui gerar um código livre. Tente de novo.");
 }
 
+/** Procura um link já criado cujo destino termina com `sufixo` (ex.: "/r/<pubId>"), para não duplicar. */
+export async function acharLinkPorFinalDoDestino(sufixo: string): Promise<string | null> {
+  const { data } = await supabase.from("links").select("slug").like("target", `%${sufixo}`).limit(1);
+  return data && data.length > 0 ? (data[0] as { slug: string }).slug : null;
+}
+
 /** Remove um link criado por engano (ex.: a publicação não chegou a ser salva). */
 export async function removerLinkCurto(slug: string): Promise<void> {
   const { error } = await supabase.from("links").delete().eq("slug", slug);

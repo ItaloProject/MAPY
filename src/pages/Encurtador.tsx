@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import "../components/Layout.css";
 import "./Encurtador.css";
 import { supabase } from "../lib/supabase";
@@ -27,7 +28,8 @@ export default function Encurtador() {
   const [links, setLinks] = useState<Link[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroLista, setErroLista] = useState("");
-  const [busca, setBusca] = useState("");
+  const [params] = useSearchParams();
+  const [busca, setBusca] = useState(params.get("q") ?? ""); // ?q=<apelido> abre já filtrado (vem do modal do QR)
 
   const [destino, setDestino] = useState("");
   const [apelido, setApelido] = useState("");

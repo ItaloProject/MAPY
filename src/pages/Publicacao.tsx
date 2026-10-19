@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
 import { carregarRascunho, salvarRascunho, apagarRascunho, type Rascunho } from "../lib/rascunhos";
 import { duplicarHistoricoEscolar } from "../lib/historicoEscolar";
-import { criarLinkCurto, removerLinkCurto, linkCurtoUrl } from "../lib/links";
+import { criarLinkCurto, removerLinkCurto, linkCurtoUrl, acharLinkPorFinalDoDestino } from "../lib/links";
 import HistoricoRegistros from "./HistoricoRegistros";
 import "../components/Layout.css";
 import "./Publicacao.css";
@@ -1351,24 +1351,17 @@ function QRDisplay({ cliente, size = 245 }: { cliente: Cliente; size?: number })
   return <QRCodeSVG value={urlDoQr(cliente)} size={size} {...QR_STYLE} />;
 }
 
-function linkCurtoValido(v: string): boolean {
-  try {
-    const u = new URL(v);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch { return false; }
-}
-
 /* ── Modal QR ── */
 // onSalvarLinkCurto devolve "" quando salvou, ou a mensagem de erro.
 function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
   cliente: Cliente; onClose: () => void; onSalvarLinkCurto?: (urlCurta: string) => Promise<string>;
 }) {
+  const navigate = useNavigate();
   const [copiado, setCopiado] = useState(false);
-  const [copiadoDestino, setCopiadoDestino] = useState(false);
-  const [linkCurto, setLinkCurto] = useState(cliente.urlCurta ?? "");
-  const [salvandoLink, setSalvandoLink] = useState(false);
+  const [ativando, setAtivando] = useState(false);
   const [erroLink, setErroLink] = useState("");
   const qrUrl = urlDoQr(cliente);
+  const slugCurto = cliente.urlCurta?.split("/g/")[1] ?? "";
 
   async function compartilhar() {
     const dados = { title: "Publicação e-MEC", text: `Publicação de ${cliente.nome}`, url: qrUrl };
@@ -1382,24 +1375,25 @@ function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
     } catch { /* cancelado pelo usuário */ }
   }
 
-  async function copiarDestino() {
-    try {
-      await navigator.clipboard.writeText(cliente.url);
-      setCopiadoDestino(true);
-      setTimeout(() => setCopiadoDestino(false), 2000);
-    } catch { /* sem permissão da área de transferência */ }
-  }
-
-  async function salvarLink() {
+  // Liga este QR ao Encurtador: reaproveita um link que já aponte para esta publicação ou cria um novo.
+  async function ativarEncurtador() {
     if (!onSalvarLinkCurto) return;
-    const v = linkCurto.trim();
-    if (v && !linkCurtoValido(v)) { setErroLink("Cole o endereço completo, começando com https://"); return; }
     setErroLink("");
-    setSalvandoLink(true);
-    const erro = await onSalvarLinkCurto(v);
-    setSalvandoLink(false);
-    if (erro) setErroLink(erro);
-    else setLinkCurto(v);
+    setAtivando(true);
+    let criado = "";
+    try {
+      const existente = await acharLinkPorFinalDoDestino(`/r/${cliente.pubId}`);
+      const slug = existente ?? (criado = await criarLinkCurto(cliente.url));
+      const erro = await onSalvarLinkCurto(linkCurtoUrl(slug));
+      if (erro) {
+        if (criado) await removerLinkCurto(criado);
+        setErroLink(erro);
+      }
+    } catch (e) {
+      setErroLink(e instanceof Error ? e.message : "Não foi possível ativar o Encurtador.");
+    } finally {
+      setAtivando(false);
+    }
   }
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -1474,26 +1468,32 @@ function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
               </div>
               {onSalvarLinkCurto && (
                 <div style={{ width: "100%", borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>Link curto do QR (opcional)</div>
-                  <div style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>
-                    Crie o link curto no encurtador (ex.: TinyURL) apontando para o destino abaixo e cole aqui.
-                    O QR passa a usar o link curto; para mudar o destino depois, edite no encurtador, sem trocar o QR.
-                    Em branco e Salvar volta ao endereço normal.
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <code style={{ flex: 1, fontSize: 11, wordBreak: "break-all", color: "var(--fg-muted)" }}>{cliente.url}</code>
-                    <button type="button" className="btn-sm" onClick={() => void copiarDestino()}>
-                      {copiadoDestino ? "Copiado ✓" : "Copiar destino"}
-                    </button>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input className="edit-input" style={{ flex: 1 }} placeholder="https://tinyurl.com/..."
-                      value={linkCurto} onChange={e => { setLinkCurto(e.target.value); setErroLink(""); }} />
-                    <button type="button" className="btn-sm" disabled={salvandoLink || linkCurto.trim() === (cliente.urlCurta ?? "")}
-                      onClick={() => void salvarLink()}>
-                      {salvandoLink ? "Salvando..." : "Salvar"}
-                    </button>
-                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>Encurtador</div>
+                  {cliente.urlCurta ? (
+                    <>
+                      <div style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                        Este QR usa o Encurtador. Para trocar o destino sem mudar o QR, edite o link na página Encurtador.
+                      </div>
+                      <div>
+                        <button type="button" className="btn-sm"
+                          onClick={() => navigate(slugCurto ? `/encurtador?q=${encodeURIComponent(slugCurto)}` : "/encurtador")}>
+                          Trocar destino no Encurtador
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>
+                        Este QR ainda usa o endereço direto. Ative o Encurtador para poder trocar o destino depois sem refazer o QR.
+                        O QR muda uma vez; o QR antigo continua abrindo normalmente.
+                      </div>
+                      <div>
+                        <button type="button" className="btn-sm" disabled={ativando} onClick={() => void ativarEncurtador()}>
+                          {ativando ? "Ativando..." : "Ativar Encurtador"}
+                        </button>
+                      </div>
+                    </>
+                  )}
                   {erroLink && <span style={{ fontSize: 12, color: "#f87171" }}>{erroLink}</span>}
                 </div>
               )}
