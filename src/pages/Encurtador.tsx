@@ -1,8 +1,10 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { useSearchParams } from "react-router-dom";
 import "../components/Layout.css";
 import "./Encurtador.css";
 import { supabase } from "../lib/supabase";
+import { baixarQrPng } from "../lib/qrPng";
 import {
   BASES_DESTINO, SLUG_RE, criarLinkCurto, destinoValido, linkCurtoUrl as linkCurto, origemDe, trocarOrigem,
 } from "../lib/links";
@@ -16,6 +18,11 @@ type Link = {
 };
 
 const fmtData = (iso: string) => new Date(iso).toLocaleString("pt-BR");
+
+type Aluno = { nome: string; urlCurta: string };
+
+// Mesmo estilo do QR do modal em Publicação: o desenho gerado aqui é idêntico ao de lá.
+const QR_STYLE = { fgColor: "#000000", bgColor: "#ffffff", level: "Q", marginSize: 4 } as const;
 
 async function copiarTexto(texto: string): Promise<boolean> {
   try {
@@ -50,6 +57,9 @@ export default function Encurtador() {
   const [aplicando, setAplicando] = useState(false);
   const [msgLote, setMsgLote] = useState<{ tipo: "ok" | "err"; texto: string } | null>(null);
 
+  const [alunos, setAlunos] = useState<Record<string, Aluno>>({}); // por apelido do link curto
+  const [qrAberto, setQrAberto] = useState<Link | null>(null);
+
   async function carregar() {
     setCarregando(true);
     const { data, error } = await supabase
@@ -67,11 +77,28 @@ export default function Encurtador() {
 
   useEffect(() => { carregar(); }, []);
 
+  // Descobre de quem é cada link: o link curto salvo na publicação termina em /g/<apelido>
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase.from("publicacoes").select("nome,url_curta").not("url_curta", "is", null);
+      const m: Record<string, Aluno> = {};
+      for (const p of (data ?? []) as { nome: string; url_curta: string | null }[]) {
+        const slug = p.url_curta?.split("/g/")[1];
+        if (slug && p.url_curta) m[slug] = { nome: p.nome, urlCurta: p.url_curta };
+      }
+      setAlunos(m);
+    })();
+  }, []);
+
+  // O QR é o do link salvo na publicação (exatamente o que está impresso); sem aluno, o link curto atual.
+  const qrValor = (l: Link) => alunos[l.slug]?.urlCurta || linkCurto(l.slug);
+
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return links;
-    return links.filter(l => l.slug.toLowerCase().includes(q) || l.target.toLowerCase().includes(q));
-  }, [links, busca]);
+    return links.filter(l =>
+      l.slug.toLowerCase().includes(q) || l.target.toLowerCase().includes(q) || (alunos[l.slug]?.nome ?? "").toLowerCase().includes(q));
+  }, [links, busca, alunos]);
 
   // Quantos destinos estão em cada domínio (os que não são de nenhum dos dois entram em "outros")
   const contagemBases = useMemo(() => {
@@ -253,7 +280,7 @@ export default function Encurtador() {
             className="enc-busca"
             value={busca}
             onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por apelido ou destino..."
+            placeholder="Buscar por aluno, apelido ou destino..."
           />
         </div>
 
@@ -291,6 +318,7 @@ export default function Encurtador() {
                   <th className="enc-col-sel">
                     <input type="checkbox" checked={todosMarcados} onChange={alternarTodos} aria-label="Selecionar todos" />
                   </th>
+                  <th>QR</th>
                   <th>Link curto</th>
                   <th>Destino</th>
                   <th>Cliques</th>
@@ -305,10 +333,16 @@ export default function Encurtador() {
                       <td className="enc-col-sel">
                         <input type="checkbox" checked={sel.has(l.slug)} onChange={() => alternar(l.slug)} aria-label={`Selecionar ${l.slug}`} />
                       </td>
+                      <td className="enc-col-qr">
+                        <button type="button" className="enc-qr-mini" onClick={() => setQrAberto(l)} title="Ver QR Code" aria-label={`Ver QR Code de ${l.slug}`}>
+                          <QRCodeSVG value={qrValor(l)} size={44} fgColor="#000000" bgColor="#ffffff" level="Q" marginSize={1} />
+                        </button>
+                      </td>
                       <td>
                         <a className="enc-mono enc-link" href={linkCurto(l.slug)} target="_blank" rel="noreferrer">
                           /g/{l.slug}
                         </a>
+                        {alunos[l.slug] && <div className="enc-aluno">{alunos[l.slug].nome}</div>}
                       </td>
                       <td className="enc-destino">{l.target}</td>
                       <td className="enc-num">{l.clicks}</td>
@@ -323,7 +357,7 @@ export default function Encurtador() {
                     </tr>
                     {editando === l.slug && (
                       <tr className="enc-linha-edicao">
-                        <td colSpan={6}>
+                        <td colSpan={7}>
                           <div className="enc-edicao">
                             <input
                               type="url"
@@ -348,6 +382,63 @@ export default function Encurtador() {
           </div>
         )}
       </section>
+
+      {qrAberto && (
+        <ModalQrLink
+          valor={qrValor(qrAberto)}
+          slug={qrAberto.slug}
+          nome={alunos[qrAberto.slug]?.nome}
+          onClose={() => setQrAberto(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ModalQrLink({ valor, slug, nome, onClose }: { valor: string; slug: string; nome?: string; onClose: () => void }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", fn);
+    return () => document.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  async function copiarLink() {
+    if (await copiarTexto(valor)) {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    }
+  }
+
+  function baixar() {
+    if (svgRef.current) baixarQrPng(svgRef.current, `qrcode-${nome ? nome.split(" ")[0].toLowerCase() : slug}.png`);
+  }
+
+  return (
+    <div className="enc-modal-fundo" onClick={onClose}>
+      <div className="enc-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label="QR Code">
+        <div className="enc-modal-topo">
+          <div>
+            <strong>QR Code</strong>
+            {nome && <div className="enc-modal-sub">{nome}</div>}
+          </div>
+          <button type="button" className="btn-sm" onClick={onClose} aria-label="Fechar">✕</button>
+        </div>
+        <div className="enc-modal-corpo">
+          <div className="enc-modal-qr">
+            <QRCodeSVG ref={svgRef} value={valor} size={260} {...QR_STYLE} />
+          </div>
+          <a className="enc-mono enc-link enc-modal-link" href={valor} target="_blank" rel="noreferrer">{valor}</a>
+          <div className="enc-modal-sub">Ao trocar o destino no Encurtador, este QR continua o mesmo.</div>
+        </div>
+        <div className="enc-modal-rodape">
+          <button type="button" className="btn-sm" onClick={copiarLink}>{copiado ? "Copiado!" : "Copiar link"}</button>
+          <button type="button" className="btn-primary" onClick={baixar}>Baixar PNG</button>
+          <button type="button" className="btn-sm" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
     </div>
   );
 }
