@@ -21,8 +21,11 @@ export function destinoValido(url: string): boolean {
   }
 }
 
-/** Os dois domínios usados nos destinos (/r/<id>) dos alunos; a troca em lote alterna entre eles. */
-export const BASES_DESTINO = ["https://emec.br.com", "https://e-meccom.vercel.app"];
+/**
+ * Domínios que servem o mesmo sistema e o mesmo banco (projetos e-mec.com e mapy no Vercel).
+ * Os destinos (/r/<id>) dos alunos ficam num deles; a troca em lote alterna entre os três como rota de fuga.
+ */
+export const BASES_DESTINO = ["https://emec.br.com", "https://e-meccom.vercel.app", "https://mapy-one.vercel.app"];
 
 export function origemDe(url: string): string {
   try { return new URL(url).origin; } catch { return ""; }
