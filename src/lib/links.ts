@@ -46,12 +46,24 @@ export function trocarOrigem(target: string, base: string): string | null {
 }
 
 /**
+ * Remove o BOM (U+FEFF), espaços de largura zero e espaços nas pontas. Eles entram por valores colados
+ * em variáveis de ambiente ou campos e, dentro de um QR, fazem o leitor não reconhecer o link.
+ */
+export function limparTexto(v: string): string {
+  return v.replace(/[​-‍﻿]/g, "").trim();
+}
+
+/** Domínio vindo de variável de ambiente: sem caracteres invisíveis, sem espaços e sem barra no fim. */
+export function limparBase(v: string | undefined): string {
+  return limparTexto(v ?? "").replace(/\/+$/, "");
+}
+
+/**
  * Domínio que vai DENTRO do QR. Defina VITE_SHORT_BASE_URL com o domínio mais estável
  * (ex.: https://e-meccom.vercel.app); sem ela, usa o domínio em que o sistema está aberto.
  */
 export function baseLinkCurto(): string {
-  const base = (import.meta.env.VITE_SHORT_BASE_URL as string | undefined)?.trim().replace(/\/$/, "");
-  return base || window.location.origin;
+  return limparBase(import.meta.env.VITE_SHORT_BASE_URL as string | undefined) || window.location.origin;
 }
 
 export const linkCurtoUrl = (slug: string) => `${baseLinkCurto()}/g/${slug}`;
@@ -61,10 +73,11 @@ export const linkCurtoUrl = (slug: string) => `${baseLinkCurto()}/g/${slug}`;
  * Lança Error com mensagem em português.
  */
 export async function criarLinkCurto(target: string, apelido = ""): Promise<string> {
+  const alvo = limparTexto(target);
   const { data: { user } } = await supabase.auth.getUser();
   for (let tentativa = 0; tentativa < 5; tentativa++) {
     const slug = apelido || gerarSlug();
-    const { error } = await supabase.from("links").insert({ slug, target, created_by: user?.id ?? null });
+    const { error } = await supabase.from("links").insert({ slug, target: alvo, created_by: user?.id ?? null });
     if (!error) return slug;
     if (error.code !== "23505") throw new Error("Erro ao criar o link: " + error.message);
     if (apelido) throw new Error("Esse apelido já está em uso.");

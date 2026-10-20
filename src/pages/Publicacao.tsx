@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import { marcarConcluido } from "../lib/controle";
 import { carregarRascunho, salvarRascunho, apagarRascunho, type Rascunho } from "../lib/rascunhos";
 import { duplicarHistoricoEscolar } from "../lib/historicoEscolar";
-import { criarLinkCurto, removerLinkCurto, linkCurtoUrl, acharLinkPorFinalDoDestino } from "../lib/links";
+import { criarLinkCurto, removerLinkCurto, linkCurtoUrl, acharLinkPorFinalDoDestino, limparBase } from "../lib/links";
 import HistoricoRegistros from "./HistoricoRegistros";
 import "../components/Layout.css";
 import "./Publicacao.css";
@@ -2417,7 +2417,7 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     }
 
     const pubId = await gerarPubId(grupo === "estacio");
-    const qrBase = (import.meta.env.VITE_QR_BASE_URL as string | undefined)?.replace(/\/$/, "") || window.location.origin;
+    const qrBase = limparBase(import.meta.env.VITE_QR_BASE_URL as string | undefined) || window.location.origin;
     const url = grupo === "estacio"
       ? `${DIPLOMA_BASE}/${pubId}`
       : `${qrBase}/r/${pubId}`;
