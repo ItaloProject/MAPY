@@ -30,7 +30,8 @@ function carregarTemplateEstacio(): Promise<ArrayBuffer> {
 }
 
 const STORAGE_BUCKET = "diplomas";
-const DIPLOMA_BASE = "https://consultadiploma.estaciio.com.br/diploma";
+// O domínio estaciio.com.br foi suspenso (DNS não resolve): o diploma passa a abrir no domínio do Vercel do portal (projeto est).
+const DIPLOMA_BASE = "https://est-fawn-sigma.vercel.app/diploma";
 
 async function uploadDocxStorage(blob: Blob, pubId: string): Promise<string | null> {
   try {
