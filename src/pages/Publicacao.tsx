@@ -167,7 +167,7 @@ function dadosDoDiploma(c: Cliente): Record<string, string> {
     registro_processo: PROCESSO_FIXO,
     protocolo: c.protocolo,
     pub_id: c.pubId,
-    url: c.url,
+    url: urlDoQr(c), // com link curto, o texto do diploma mostra o link do Encurtador
   };
 }
 
@@ -201,7 +201,9 @@ async function gerarDocxPreenchido(template: ArrayBuffer, cliente: Cliente): Pro
   doc.render(dadosDoDiploma(cliente));
   const saida = doc.getZip();
 
-  const qr = await QRCode.toDataURL(cliente.url, {
+  // Com link curto (Encurtador), o QR, o hiperlink e o texto do diploma usam o link curto.
+  const endereco = urlDoQr(cliente);
+  const qr = await QRCode.toDataURL(endereco, {
     errorCorrectionLevel: QR_STYLE.level, margin: QR_STYLE.marginSize, width: 512,
     color: { dark: QR_STYLE.fgColor, light: QR_STYLE.bgColor },
   });
@@ -212,7 +214,7 @@ async function gerarDocxPreenchido(template: ArrayBuffer, cliente: Cliente): Pro
   if (rels) {
     saida.file(relsPath, rels.replace(
       /(<Relationship [^>]*Type="[^"]*\/hyperlink"[^>]*Target=")[^"]*(")/g,
-      `$1${escXml(cliente.url)}$2`,
+      `$1${escXml(endereco)}$2`,
     ));
   }
 
@@ -225,6 +227,62 @@ async function publicarDocxEstacio(cliente: Cliente): Promise<{ blob: Blob; docx
   const blob = await gerarDocxPreenchido(await carregarTemplateEstacio(), cliente);
   const docxUrl = await uploadDocxStorage(blob, cliente.pubId);
   return { blob, docxUrl };
+}
+
+const escRegex = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Caminho do destino (ex.: "/r/<id>" ou "/diploma/<id>"), usado para reaproveitar um link que já aponte para a publicação.
+function caminhoDoDestino(url: string, pubId: string): string {
+  try { return new URL(url).pathname; } catch { return `/r/${pubId}`; }
+}
+
+// Garante o link curto da publicação (reaproveita um que já aponte para ela). Se falhar, segue com o endereço direto.
+async function comLinkCurto(c: Cliente): Promise<Cliente> {
+  if (c.urlCurta) return c;
+  try {
+    const existente = await acharLinkPorFinalDoDestino(caminhoDoDestino(c.url, c.pubId));
+    const slug = existente ?? (await criarLinkCurto(c.url));
+    return { ...c, urlCurta: linkCurtoUrl(slug) };
+  } catch (e) {
+    console.error("[link-curto]", e);
+    return c;
+  }
+}
+
+// Liga o diploma já publicado ao Encurtador SEM refazer o documento: baixa o .docx do Storage e troca só o endereço
+// (QR, hiperlink e texto) pelo link curto. Se não conseguir baixar, gera o diploma de novo a partir dos dados.
+// `cliente.urlCurta` já precisa estar preenchido. Devolve o novo docxUrl (ou null se o envio falhar).
+async function ligarDocxAoEncurtador(cliente: Cliente): Promise<string | null> {
+  const [{ default: PizZip }, { default: QRCode }] = await Promise.all([import("pizzip"), import("qrcode")]);
+
+  let bruto: ArrayBuffer | null = null;
+  const baixado = await supabase.storage.from(STORAGE_BUCKET).download(`estacio/${cliente.pubId}.docx`);
+  if (!baixado.error && baixado.data) bruto = await baixado.data.arrayBuffer();
+  if (!bruto && cliente.docxUrl) {
+    try {
+      const r = await fetch(cliente.docxUrl);
+      if (r.ok) bruto = await r.arrayBuffer();
+    } catch { /* cai na geração */ }
+  }
+  if (!bruto) return (await publicarDocxEstacio(cliente)).docxUrl;
+
+  const novo = urlDoQr(cliente);
+  const zip = new PizZip(bruto);
+  const antigo = new RegExp(`https?://[^\\s<"']*/diploma/${escRegex(cliente.pubId)}`, "g");
+  for (const caminho of ["word/document.xml", "word/_rels/document.xml.rels"]) {
+    const texto = zip.file(caminho)?.asText();
+    if (texto) zip.file(caminho, texto.replace(antigo, escXml(novo)));
+  }
+  const qr = await QRCode.toDataURL(novo, {
+    errorCorrectionLevel: QR_STYLE.level, margin: QR_STYLE.marginSize, width: 512,
+    color: { dark: QR_STYLE.fgColor, light: QR_STYLE.bgColor },
+  });
+  zip.file(TEMPLATE_QR, qr.split(",")[1], { base64: true });
+
+  const blob = new Blob([zip.generate({ type: "arraybuffer" })], {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  return uploadDocxStorage(blob, cliente.pubId);
 }
 
 async function renderizarDocx(blob: Blob, container: HTMLElement) {
@@ -1363,6 +1421,7 @@ function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
   const [erroLink, setErroLink] = useState("");
   const qrUrl = urlDoQr(cliente);
   const slugCurto = cliente.urlCurta?.split("/g/")[1] ?? "";
+  const ehEstacio = cliente.pubId.startsWith(PREFIXO_CODIGO_ESTACIO);
 
   async function compartilhar() {
     const dados = { title: "Publicação e-MEC", text: `Publicação de ${cliente.nome}`, url: qrUrl };
@@ -1383,7 +1442,7 @@ function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
     setAtivando(true);
     let criado = "";
     try {
-      const existente = await acharLinkPorFinalDoDestino(`/r/${cliente.pubId}`);
+      const existente = await acharLinkPorFinalDoDestino(caminhoDoDestino(cliente.url, cliente.pubId));
       const slug = existente ?? (criado = await criarLinkCurto(cliente.url));
       const erro = await onSalvarLinkCurto(linkCurtoUrl(slug));
       if (erro) {
@@ -1486,7 +1545,9 @@ function ModalQR({ cliente, onClose, onSalvarLinkCurto }: {
                     <>
                       <div style={{ fontSize: 11, color: "var(--fg-muted)", lineHeight: 1.5 }}>
                         Este QR ainda usa o endereço direto. Ative o Encurtador para poder trocar o destino depois sem refazer o QR.
-                        O QR muda uma vez; o QR antigo continua abrindo normalmente.
+                        {ehEstacio
+                          ? " O diploma (.docx) é atualizado com o QR novo e fica pronto para baixar."
+                          : " O QR muda uma vez; o QR antigo continua abrindo normalmente."}
                       </div>
                       <div>
                         <button type="button" className="btn-sm" disabled={ativando} onClick={() => void ativarEncurtador()}>
@@ -1774,19 +1835,22 @@ function ModalEditar({ cliente, estacio, onSave, onClose }: { cliente: Cliente; 
 }
 
 /* ── Tab CLIENTES ── */
-function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto, onApagar, onToggleAtivo, onToggleAtivoLote }: {
+function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto, onLigarTodos, onApagar, onToggleAtivo, onToggleAtivoLote }: {
   clientes: Cliente[];
   isAdmin: boolean;
   estacio: boolean;
   onNovo: () => void;
   onEditar: (c: Cliente) => void;
   onLinkCurto: (c: Cliente, urlCurta: string) => Promise<string>;
+  onLigarTodos?: () => Promise<{ feitos: number; falhas: number }>;
   onApagar: (c: Cliente) => void | Promise<void>;
   onToggleAtivo: (c: Cliente) => void | Promise<void>;
   onToggleAtivoLote: (pubIds: string[], ativo: boolean) => void | Promise<void>;
 }) {
   const [search, setSearch] = useState("");
   const [qrCliente, setQrCliente] = useState<Cliente | null>(null);
+  const [ligando, setLigando] = useState(false);
+  const semLink = clientes.filter(c => !c.urlCurta && c.url).length;
   const [editCliente, setEditCliente] = useState<Cliente | null>(null);
   const [delCliente, setDelCliente] = useState<Cliente | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -1807,6 +1871,15 @@ function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto
     else setSelected(new Set(filtered.map(c => c.pubId)));
   }
 
+  async function ligarTodos() {
+    if (!onLigarTodos) return;
+    if (!window.confirm(`Ligar ${semLink} diploma(s) ao Encurtador?\nO .docx de cada aluno é atualizado com o QR novo. Pode levar alguns minutos: não feche a página.`)) return;
+    setLigando(true);
+    const { feitos, falhas } = await onLigarTodos();
+    setLigando(false);
+    window.alert(`${feitos} diploma(s) ligado(s) ao Encurtador.${falhas ? ` ${falhas} falharam: tente de novo.` : ""}`);
+  }
+
   async function confirmarApagar() {
     if (!delCliente) return;
     setDeleting(true);
@@ -1821,7 +1894,7 @@ function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto
         <ModalQR
           cliente={qrCliente}
           onClose={() => setQrCliente(null)}
-          onSalvarLinkCurto={estacio ? undefined : async urlCurta => {
+          onSalvarLinkCurto={async urlCurta => {
             const erro = await onLinkCurto(qrCliente, urlCurta);
             if (!erro) setQrCliente({ ...qrCliente, urlCurta });
             return erro;
@@ -1862,6 +1935,11 @@ function TabClientes({ clientes, isAdmin, estacio, onNovo, onEditar, onLinkCurto
       <div className="tab-toolbar">
         <input className="search-input" placeholder="Buscar por nome ou CPF…"
           value={search} onChange={e => setSearch(e.target.value)} />
+        {estacio && isAdmin && onLigarTodos && semLink > 0 && (
+          <button className="btn-sm" disabled={ligando} onClick={() => void ligarTodos()}>
+            {ligando ? "Ligando..." : `Ligar ${semLink} ao Encurtador`}
+          </button>
+        )}
         <button className="btn-primary pub-add-desktop" onClick={onNovo}>+ Adicionar cliente</button>
       </div>
 
@@ -2401,12 +2479,14 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
         protocolo: form.protocolo || editando.protocolo,
       };
       setSalvando(true);
-      const comDiploma = isEstacio ? await gerarDiploma(atualizado) : null;
-      const ok = await onEditar(comDiploma ?? atualizado);
+      // Estácio: garante o link curto antes de gerar o diploma, para o QR do .docx já sair pelo Encurtador.
+      const comLink = isEstacio ? await comLinkCurto(atualizado) : atualizado;
+      const comDiploma = isEstacio ? await gerarDiploma(comLink) : null;
+      const ok = await onEditar(comDiploma ?? comLink);
       setSalvando(false);
       if (!ok) { setErro("Não foi possível salvar as alterações. Tente novamente."); return; }
       if (isEstacio && !comDiploma) return;
-      const salvo = comDiploma ?? atualizado;
+      const salvo = comDiploma ?? comLink;
       const matriculaDiploma = matriculaDoDiploma(salvo);
       const { data: doPub } = await supabase.from("acessos_estacio").select("id").eq("pub_id", salvo.pubId).limit(1);
       const temAcesso = ((doPub as { id: string }[] | null) ?? []).length > 0;
@@ -2453,23 +2533,24 @@ function TabNovo({ clientes, onGerar, onEditar, prefill, grupo, rascunhoDb, auto
     };
 
     setSalvando(true);
-    const comDiploma = isEstacio ? await gerarDiploma(novo) : null;
-
-    // Encurtador: cria o link curto desta publicação e já o usa no QR (o destino pode ser editado depois).
-    // Se falhar, a publicação segue normalmente com o endereço direto.
+    // Encurtador: cria o link curto ANTES do diploma, para o QR do .docx (Estácio) e o da tela já saírem por ele
+    // (o destino pode ser editado depois). Se falhar, a publicação segue com o endereço direto.
     let slugCurto = "";
-    if (!isEstacio) {
-      try {
-        slugCurto = await criarLinkCurto(url);
-      } catch (e) {
-        console.error("[link-curto/auto]", e);
-        setAvisoCopia("Publicação gerada sem link curto (o QR usa o endereço direto). Crie o link na página Encurtador.");
-      }
+    try {
+      slugCurto = await criarLinkCurto(url);
+    } catch (e) {
+      console.error("[link-curto/auto]", e);
+      setAvisoCopia("Publicação gerada sem link curto (o QR usa o endereço direto). Crie o link na página Encurtador.");
     }
+    const novoComLink = slugCurto ? { ...novo, urlCurta: linkCurtoUrl(slugCurto) } : novo;
+    const comDiploma = isEstacio ? await gerarDiploma(novoComLink) : null;
     setSalvando(false);
-    if (isEstacio && !comDiploma) return;
+    if (isEstacio && !comDiploma) {
+      if (slugCurto) void removerLinkCurto(slugCurto); // o diploma não foi gerado: não deixa o link órfão
+      return;
+    }
 
-    const novoFinal = comDiploma ?? (slugCurto ? { ...novo, urlCurta: linkCurtoUrl(slugCurto) } : novo);
+    const novoFinal = comDiploma ?? novoComLink;
     const gravando = onGerar(novoFinal);
     if (slugCurto) {
       // Publicação não foi salva: não deixa o link órfão no Encurtador.
@@ -3112,9 +3193,15 @@ export default function Publicacao() {
 
   // Devolve "" quando salvou, ou a mensagem de erro.
   async function salvarLinkCurto(c: Cliente, urlCurta: string): Promise<string> {
+    // Estácio: o QR está dentro do .docx, então o documento precisa ser atualizado junto com o link.
+    let docxUrl: string | null = null;
+    if (grupo === "estacio" && urlCurta) {
+      docxUrl = await ligarDocxAoEncurtador({ ...c, urlCurta }).catch(e => { console.error("[diploma/link]", e); return null; });
+      if (!docxUrl) return "Não foi possível atualizar o diploma (.docx) com o link curto. Tente novamente.";
+    }
     const { error } = await supabase
       .from("publicacoes")
-      .update({ url_curta: urlCurta || null })
+      .update({ url_curta: urlCurta || null, ...(docxUrl ? { docx_url: docxUrl } : {}) })
       .eq("pub_id", c.pubId);
     if (error) {
       console.error("[link-curto]", error);
@@ -3123,15 +3210,29 @@ export default function Publicacao() {
         ? "Banco sem a coluna do link curto: aplique a migração 022_url_curta.sql no Supabase."
         : "Não foi possível salvar o link curto. Tente novamente.";
     }
-    setClientes(prev => prev.map(x => x.pubId === c.pubId ? { ...x, urlCurta } : x));
+    setClientes(prev => prev.map(x => x.pubId === c.pubId ? { ...x, urlCurta, ...(docxUrl ? { docxUrl } : {}) } : x));
     return "";
+  }
+
+  // Estácio: liga ao Encurtador todos os diplomas que ainda estão sem link curto (um por vez; repetir é seguro).
+  async function ligarTodosAoEncurtador(): Promise<{ feitos: number; falhas: number }> {
+    let feitos = 0;
+    let falhas = 0;
+    for (const c of clientes.filter(x => !x.urlCurta && x.url)) {
+      const comLink = await comLinkCurto(c);
+      if (!comLink.urlCurta) { falhas++; continue; }
+      const erro = await salvarLinkCurto(c, comLink.urlCurta);
+      if (erro) falhas++; else feitos++;
+    }
+    return { feitos, falhas };
   }
 
   async function editarComDiploma(c: Cliente) {
     if (grupo !== "estacio") { await editarCliente(c); return; }
-    const publicado = await publicarDocxEstacio(c).catch((e) => { console.error("[diploma]", e); return null; });
+    const comLink = await comLinkCurto(c);
+    const publicado = await publicarDocxEstacio(comLink).catch((e) => { console.error("[diploma]", e); return null; });
     if (!publicado?.docxUrl) window.alert("Dados salvos, mas o diploma (.docx) não foi regenerado. Edite pela aba NOVO para tentar novamente.");
-    await editarCliente(publicado?.docxUrl ? { ...c, docxUrl: publicado.docxUrl } : c);
+    await editarCliente(publicado?.docxUrl ? { ...comLink, docxUrl: publicado.docxUrl } : comLink);
   }
 
   async function apagarCliente(c: Cliente) {
@@ -3192,7 +3293,7 @@ export default function Publicacao() {
             </div>
           ) : (
             <>
-              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onLinkCurto={salvarLinkCurto} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
+              {activeTab === "clientes"   && <TabClientes clientes={clientes} isAdmin={isAdmin} estacio={grupo === "estacio"} onNovo={() => setActiveTab("novo")} onEditar={editarComDiploma} onLinkCurto={salvarLinkCurto} onLigarTodos={ligarTodosAoEncurtador} onApagar={apagarCliente} onToggleAtivo={toggleAtivo} onToggleAtivoLote={toggleAtivoLote} />}
               {activeTab === "novo"       && <TabNovo key={grupo} clientes={clientes} onGerar={adicionarCliente} onEditar={editarCliente} prefill={prefill} grupo={grupo} rascunhoDb={rascunhoDb} autor={usuario?.nome} onRascunhoConcluido={() => setRascunhoDb(null)} editarPubId={pubEditarUrl} duplicarPubId={pubDuplicarUrl} onVerHistorico={abrirHistorico} />}
               {activeTab === "historico"  && (
                 <HistoricoRegistros
